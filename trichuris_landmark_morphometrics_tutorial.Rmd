@@ -11,10 +11,20 @@ output:
     highlight: tango
     code_folding: show
     df_print: paged
+params:
+  web_version: false
 ---
 
 ```{r knitr-options, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, fig.width = 7, fig.height = 4.5)
+```
+
+```{r web-version, echo=FALSE, results="asis"}
+# The published web page already shows every figure and output, so the
+# "Check your ..." boxes would only repeat them there: hide them on that version.
+if (isTRUE(get0("params")$web_version)) {
+  cat("<style>details.expected-figure { display: none; }</style>")
+}
 ```
 
 ```{css, echo=FALSE}
@@ -90,6 +100,8 @@ Checking your figures and outputs
 :::
 
 Under every figure, and under the most important tables, there is a collapsed box (**"Check your figure"** or **"Check your output"**). Make your own plot first, then click the box to compare it with the expected result. Everyone uses the same data and the same random seeds, so your figure should match it exactly.
+
+(If you are reading the **online version** of this tutorial, you won't see these boxes. The figures and tables on that page already *are* the expected results. They appear once you download the tutorial and run it yourself.)
 
 - In the **knitted HTML**, the box sits just below your figure. Click it to open it.
 - When you **run chunks one at a time** in RStudio, the expected figures are in the `expected_figures/` folder (*Files* pane), named after the chunk, for example `fig-growth.png`. Expected tables are written out in the `.Rmd` file itself, just below their chunk.

@@ -65,7 +65,7 @@ If you're new to R, start with **"R in ten minutes"** near the top of the tutori
 
 ## Checking your work
 
-Under every figure and every key table there is a collapsed **"Check your figure"** or **"Check your output"** box. Run the code first, then open the box to compare. The expected figures are also in the `expected_figures/` folder, named after the code chunk that makes them.
+Under every figure and every key table there is a collapsed **"Check your figure"** or **"Check your output"** box. Run the code first, then open the box to compare. The expected figures are also in the `expected_figures/` folder, named after the code chunk that makes them. (These boxes don't appear on the online version, because the figures shown there already are the expected results.)
 
 The exercises at the end have hidden **Hint** boxes.
 
@@ -99,8 +99,11 @@ The practice data can be regenerated exactly with `python tools/make_simulated_d
 **For maintainers:** after editing the tutorial, rebuild the web page from R, in the project folder:
 
 ```r
-rmarkdown::render("trichuris_landmark_morphometrics_tutorial.Rmd", output_file = "docs/index.html")
+rmarkdown::render("trichuris_landmark_morphometrics_tutorial.Rmd", output_file = "docs/index.html",
+                  params = list(web_version = TRUE))
 ```
+
+`web_version = TRUE` hides the "Check your figure/output" boxes, which would only repeat what the web page already shows. Students knitting the tutorial themselves still get them.
 
 If a figure changes on purpose, also update its PNG in `expected_figures/`.
 
