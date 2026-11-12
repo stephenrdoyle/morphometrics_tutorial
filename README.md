@@ -61,7 +61,7 @@ It takes 5 to 10 minutes. If R asks *"Do you want to install from sources the pa
 - **Step by step (recommended):** read a section, then run each grey code chunk with its green ▶ button. The output appears below the chunk.
 - **All at once:** click **Knit** at the top of the editor to build the whole tutorial as a web page, with every output and figure.
 
-If you're new to R, start with **"R in ten minutes"** near the top of the tutorial. If something goes wrong, the **"When something goes wrong"** table just after it covers the common errors.
+If you're new to R, start with **Appendix A, "R in ten minutes"**, at the end of the tutorial (there is a link near the top), then come back to Section 0. If something goes wrong, the **"When something goes wrong"** table near the top covers the common errors.
 
 ## Checking your work
 

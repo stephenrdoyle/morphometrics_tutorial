@@ -65,7 +65,7 @@ This tutorial assumes **no previous R experience**. By the end you will be able 
 
 | Session | Sections | Topic |
 |---|---|---|
-| 1 | Getting started, R in ten minutes, 0 to 5 | R basics, tidy data, importing, quality control |
+| 1 | Getting started (and Appendix A if you are new to R), 0 to 5 | R basics, tidy data, importing, quality control |
 | 2 | 6 to 10 | Hosts, growth, body plan, scaling, sex differences |
 | 3 | 11 to 15 | Mixed models, PCA, combined figures, exercises |
 
@@ -107,74 +107,10 @@ Under every figure, and under the most important tables, there is a collapsed bo
 If yours looks different, check that you ran the earlier chunks in order and didn't change the code.
 :::
 
-### R in ten minutes
+### New to R? Two appendices at the end
 
-You only need a few ideas to follow the code. Run each chunk below and look at what it prints. (Lines starting with `#` are **comments**: notes for humans, which R ignores.)
-
-**Objects and `<-`.** `<-` stores a value under a name, so you can use it later. Read it as "gets".
-
-```{r r-basics-objects}
-n_worms <- 230        # n_worms "gets" 230
-n_worms * 2           # use it: R prints the answer below the chunk
-```
-
-**Vectors with `c()`.** `c()` combines several values into one **vector**. Most R operations work on every element at once.
-
-```{r r-basics-vectors}
-lengths_um <- c(218.2, 205.5, 235.5)
-lengths_um / 1000          # every value converted to mm
-mean(lengths_um)           # mean() is a function; lengths_um is its argument
-```
-
-**Functions and arguments.** A function does a job: `mean(x)`, `round(x, digits = 1)`. The values inside the brackets are its **arguments**. Named arguments like `digits = 1` change how it behaves. For help on any function, run `?round` in the Console.
-
-**Missing values: `NA`.** R writes a blank cell as `NA` ("not available"). Most calculations give `NA` if any value is missing, unless you say to skip them with `na.rm = TRUE`.
-
-```{r r-basics-na}
-x <- c(10, NA, 30)
-mean(x)                    # NA: R won't guess the missing value
-mean(x, na.rm = TRUE)      # 20: ignore the missing value
-is.na(x)                   # TRUE where a value is missing
-```
-
-**Data frames (tibbles).** A spreadsheet-like table is a **data frame**. The tidyverse version is called a **tibble**. Each column is a vector. `toy$length` or `toy |> pull(length)` picks one column out. You will see both styles.
-
-```{r r-basics-tibble}
-library(tidyverse)
-toy <- tibble(sample = c("S1", "S2", "S3"),
-              stage  = c("L1", "L1", "Adult"),
-              length = c(220, 240, 25000))
-toy
-toy$length               # base R way to pick one column
-toy |> pull(length)      # tidyverse way: the same values
-```
-
-**Factors.** A **factor** is a categorical variable with a fixed set of **levels** in a set order. Plots and models use that order, so we set it ourselves rather than accept the alphabetical one.
-
-```{r r-basics-factor}
-factor(c("L2", "Adult", "L1"), levels = c("L1", "L2", "Adult"))
-```
-
-**The pipe `|>`.** Read `|>` as "**and then**". It passes the result on the left into the function on the right, so a long job reads top to bottom:
-
-```{r r-basics-pipe}
-toy |>
-  filter(stage == "L1") |>          # keep L1 rows  (== means "is equal to")
-  summarise(mean_length = mean(length))
-```
-
-You will often see **`%>%`** in other tutorials, online answers and older scripts. It is the tidyverse's original pipe, and for everything in this tutorial it does the same job as `|>`. `toy %>% filter(stage == "L1")` and `toy |> filter(stage == "L1")` give the same result. This tutorial uses `|>` because it is built into R (version 4.1 or newer) and is what the tidyverse now recommends.
-
-**Small functions written in place: `\(x)`.** You will often see code such as `\(x) x / 1000`. This is a short **function without a name**: "take a value, call it `x`, and return `x / 1000`". It is used with helpers like `across()`, which apply the same job to several columns:
-
-```{r r-basics-lambda}
-convert_to_mm <- \(x) x / 1000     # a function stored under a name...
-convert_to_mm(25000)
-
-toy |> mutate(across(c(length), \(x) x / 1000))   # ...or used in place, unnamed
-```
-
-**Packages.** Extra tools come in **packages**. `install.packages("name")` downloads one **once per computer**. `library(name)` switches it on **in every new session**.
+- **[Appendix A: R in ten minutes](#appendix-a-r-in-ten-minutes).** If you have never used R, work through this first (about 20 minutes). It covers the handful of ideas the code relies on: storing values with `<-`, vectors, functions, missing values (`NA`), tables (tibbles), factors, the pipe `|>` and short functions such as `\(x) x / 1000`. Come back here when you've finished.
+- **[Appendix B: how the practice data were simulated](#appendix-b-how-the-practice-data-were-simulated).** The R code behind the practice data. You don't need it for the tutorial; it is there for reference and for Exercise 6.
 
 ### When something goes wrong
 
@@ -492,7 +428,7 @@ pct_cols <- paste0(names(segment_labels), "_pct")
 The pipe `|>`
 :::
 
-Read `|>` as "and then". `worms |> count(stage)` means "take `worms`, **and then** count the rows per stage". The short functions `\(x) ...` are explained in *R in ten minutes* above.
+Read `|>` as "and then". `worms |> count(stage)` means "take `worms`, **and then** count the rows per stage". The short functions `\(x) ...` are explained in *R in ten minutes* ([Appendix A](#appendix-a-r-in-ten-minutes)).
 :::
 
 ## 2. The practice data
@@ -527,7 +463,7 @@ The messy file contains the awkward features real data has:
 How the files were made
 :::
 
-Both files were generated by the script `tools/make_simulated_data.py` (fixed random seed 2026), so they can be regenerated exactly. The same design written in R is in the [Appendix](#appendix-how-the-practice-data-were-simulated) at the end, for reference and for Exercise 6. You don't need it for the tutorial.
+Both files were generated by the script `tools/make_simulated_data.py` (fixed random seed 2026), so they can be regenerated exactly. The same design written in R is in [Appendix B](#appendix-b-how-the-practice-data-were-simulated) at the end, for reference and for Exercise 6. You don't need it for the tutorial.
 :::
 
 
@@ -2045,7 +1981,7 @@ You should get a slope of about **0.98** (95% CI about 0.88 to 1.08), from 41 wo
 
 </details>
 
-**6. (Advanced, optional) Power and mice.** This one needs you to edit a long chunk of code. Edit the R simulation chunk in the Appendix (set `eval = TRUE` in the chunk header, or just run it with its ▶ button) to use 8 mice per timepoint instead of 4 or 5, with the same number of worms in total. Point Section 3.1 at `data/my_simulation_messy.csv`, and use your own converted tidy file in Section 3.4 instead of the provided one. Rerun Section 11.6: how do the mixed-model intervals change? Then try 3 mice with twice as many worms each. (Your numbers will differ from the provided files, because the random numbers differ.)
+**6. (Advanced, optional) Power and mice.** This one needs you to edit a long chunk of code. Edit the R simulation chunk in Appendix B (set `eval = TRUE` in the chunk header, or just run it with its ▶ button) to use 8 mice per timepoint instead of 4 or 5, with the same number of worms in total. Point Section 3.1 at `data/my_simulation_messy.csv`, and use your own converted tidy file in Section 3.4 instead of the provided one. Rerun Section 11.6: how do the mixed-model intervals change? Then try 3 mice with twice as many worms each. (Your numbers will differ from the provided files, because the random numbers differ.)
 
 <details class="hint">
 <summary>Hint</summary>
@@ -2075,7 +2011,76 @@ Record the R and package versions with your results:
 sessionInfo()
 ```
 
-## Appendix: how the practice data were simulated
+## Appendix A: R in ten minutes
+
+You only need a few ideas to follow the code. Run each chunk below, in order, and look at what it prints. These chunks don't need anything from the main tutorial, so you can run them before Section 0. (Lines starting with `#` are **comments**: notes for humans, which R ignores.)
+
+**Objects and `<-`.** `<-` stores a value under a name, so you can use it later. Read it as "gets".
+
+```{r r-basics-objects}
+n_worms <- 230        # n_worms "gets" 230
+n_worms * 2           # use it: R prints the answer below the chunk
+```
+
+**Vectors with `c()`.** `c()` combines several values into one **vector**. Most R operations work on every element at once.
+
+```{r r-basics-vectors}
+lengths_um <- c(218.2, 205.5, 235.5)
+lengths_um / 1000          # every value converted to mm
+mean(lengths_um)           # mean() is a function; lengths_um is its argument
+```
+
+**Functions and arguments.** A function does a job: `mean(x)`, `round(x, digits = 1)`. The values inside the brackets are its **arguments**. Named arguments like `digits = 1` change how it behaves. For help on any function, run `?round` in the Console.
+
+**Missing values: `NA`.** R writes a blank cell as `NA` ("not available"). Most calculations give `NA` if any value is missing, unless you say to skip them with `na.rm = TRUE`.
+
+```{r r-basics-na}
+x <- c(10, NA, 30)
+mean(x)                    # NA: R won't guess the missing value
+mean(x, na.rm = TRUE)      # 20: ignore the missing value
+is.na(x)                   # TRUE where a value is missing
+```
+
+**Data frames (tibbles).** A spreadsheet-like table is a **data frame**. The tidyverse version is called a **tibble**. Each column is a vector. `toy$length` or `toy |> pull(length)` picks one column out. You will see both styles.
+
+```{r r-basics-tibble}
+library(tidyverse)
+toy <- tibble(sample = c("S1", "S2", "S3"),
+              stage  = c("L1", "L1", "Adult"),
+              length = c(220, 240, 25000))
+toy
+toy$length               # base R way to pick one column
+toy |> pull(length)      # tidyverse way: the same values
+```
+
+**Factors.** A **factor** is a categorical variable with a fixed set of **levels** in a set order. Plots and models use that order, so we set it ourselves rather than accept the alphabetical one.
+
+```{r r-basics-factor}
+factor(c("L2", "Adult", "L1"), levels = c("L1", "L2", "Adult"))
+```
+
+**The pipe `|>`.** Read `|>` as "**and then**". It passes the result on the left into the function on the right, so a long job reads top to bottom:
+
+```{r r-basics-pipe}
+toy |>
+  filter(stage == "L1") |>          # keep L1 rows  (== means "is equal to")
+  summarise(mean_length = mean(length))
+```
+
+You will often see **`%>%`** in other tutorials, online answers and older scripts. It is the tidyverse's original pipe, and for everything in this tutorial it does the same job as `|>`. `toy %>% filter(stage == "L1")` and `toy |> filter(stage == "L1")` give the same result. This tutorial uses `|>` because it is built into R (version 4.1 or newer) and is what the tidyverse now recommends.
+
+**Small functions written in place: `\(x)`.** You will often see code such as `\(x) x / 1000`. This is a short **function without a name**: "take a value, call it `x`, and return `x / 1000`". It is used with helpers like `across()`, which apply the same job to several columns:
+
+```{r r-basics-lambda}
+convert_to_mm <- \(x) x / 1000     # a function stored under a name...
+convert_to_mm(25000)
+
+toy |> mutate(across(c(length), \(x) x / 1000))   # ...or used in place, unnamed
+```
+
+**Packages.** Extra tools come in **packages**. `install.packages("name")` downloads one **once per computer**. `library(name)` switches it on **in every new session**.
+
+## Appendix B: how the practice data were simulated
 
 The practice files were made by `tools/make_simulated_data.py`. The R chunk below is the **same design written in R**: how many worms per timepoint, their average size and body proportions, the mouse effects, and the deliberate untidiness (spreadsheet headers, stray spaces, transcription errors and empty rows). Reading it shows exactly what structure the analyses are meant to recover, for example that mice differ in worm size, which is why the mixed models in Section 11 are needed.
 
