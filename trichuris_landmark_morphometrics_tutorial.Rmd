@@ -164,6 +164,8 @@ toy |>
   summarise(mean_length = mean(length))
 ```
 
+You will often see **`%>%`** in other tutorials, online answers and older scripts. It is the tidyverse's original pipe, and for everything in this tutorial it does the same job as `|>`. `toy %>% filter(stage == "L1")` and `toy |> filter(stage == "L1")` give the same result. This tutorial uses `|>` because it is built into R (version 4.1 or newer) and is what the tidyverse now recommends.
+
 **Small functions written in place: `\(x)`.** You will often see code such as `\(x) x / 1000`. This is a short **function without a name**: "take a value, call it `x`, and return `x / 1000`". It is used with helpers like `across()`, which apply the same job to several columns:
 
 ```{r r-basics-lambda}

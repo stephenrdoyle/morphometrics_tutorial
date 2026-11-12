@@ -3167,6 +3167,13 @@ the function on the right, so a long job reads top to bottom:</p>
 {"columns":[{"label":["mean_length"],"name":[1],"type":["dbl"],"align":["right"]}],"data":[{"1":"230"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
+<p>You will often see <strong><code>%&gt;%</code></strong> in other
+tutorials, online answers and older scripts. It is the tidyverse’s
+original pipe, and for everything in this tutorial it does the same job
+as <code>|&gt;</code>. <code>toy %&gt;% filter(stage == &quot;L1&quot;)</code> and
+<code>toy |&gt; filter(stage == &quot;L1&quot;)</code> give the same result. This
+tutorial uses <code>|&gt;</code> because it is built into R (version 4.1
+or newer) and is what the tidyverse now recommends.</p>
 <p><strong>Small functions written in place: <code>\(x)</code>.</strong>
 You will often see code such as <code>\(x) x / 1000</code>. This is a
 short <strong>function without a name</strong>: “take a value, call it
