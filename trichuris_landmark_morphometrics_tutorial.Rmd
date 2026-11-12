@@ -184,14 +184,14 @@ The simulated spreadsheet is laid out like a typical lab sheet. The tidy version
 | `rt_cl` | Rectum (females) / cloaca (males) |
 | `rest` | Rest of body |
 | `*_pct` | The same measurement as a percentage of whole-body length (calculated in R in Section 3.5, not recorded) |
-| `st_number` | Approximate number of stichosome units (an estimate) |
+| `st_number` | Approximate number of stichocytes (an estimate; about 50 to 60 at every stage) |
 
 <details class="more-reading">
 <summary>New to *Trichuris*? A short anatomy glossary (click to open)</summary>
 
 - **Lifestages.** Four larval stages (L1 to L4), separated by moults, then adults. **dpi** is days post infection of the mouse.
 - **Nerve ring (NR).** A ring of nerve tissue around the oesophagus, near the front of the worm. It is a convenient landmark.
-- **Oesophagus (Os) and stichosome (St).** In whipworms, most of the oesophagus is surrounded by a column of large gland cells (**stichocytes**), together called the stichosome. It fills most of the long, thin front part of the worm (the "whip"). `st_number` is an approximate count of stichocytes.
+- **Oesophagus (Os) and stichosome (St).** In whipworms, most of the oesophagus is surrounded by a column of large gland cells (**stichocytes**), together called the stichosome. It fills most of the long, thin front part of the worm (the "whip"). `st_number` is an approximate count of stichocytes. Unusually, this count stays roughly constant (about 50 to 60) through development: the stichosome grows because its cells get bigger, not more numerous (Section 11).
 - **Intestine.** Runs through the thicker back part of the worm.
 - **Ovary / testis (Ov/Ts)** and **rectum / cloaca (Rt/Cl).** Reproductive and terminal gut structures. Females have an ovary and a rectum, and males have a testis and a cloaca. The gonads only become visible in later larval stages.
 
@@ -1172,20 +1172,26 @@ How to read this
 PCA itself ignores mouse. To test group differences in PC scores while accounting for host, treat a PC score as the response in a mixed model, for example `lmer(PC1 ~ lifestage + (1 | host_id), data = filter(shape_scores, !is.na(host_id)))`. Section 13 introduces these models, and Exercise 4 tries this one.
 :::
 
-## 11. Stichosome number
+## 11. Stichosome number: a structure that grows without adding cells
 
-`st_number` is an approximate count, measured in only a subset of worms. We treat it descriptively: plot it against body length and show who contributed.
+In *Trichuris*, the number of stichocytes (the gland cells that make up the stichosome) is **set early and stays roughly constant**, at about 50 to 60, from larva to adult. Yet the stichosome itself grows more than a hundred times longer between newly hatched L1 and adult (Section 8). The question here is therefore the opposite of the scaling section: not *how fast* something grows, but whether it **changes at all**. Showing that something stays the same needs a little care, statistically.
+
+`st_number` is an approximate count, recorded for a subset of worms from L2 onwards. First, the counts per lifestage and a plot against body size:
 
 ```{r fig-stnumber}
 st_data <- worms |> drop_na(st_number)
 
-count(st_data, lifestage)
+st_data |>
+  group_by(lifestage) |>
+  summarise(n_worms = n(), median = median(st_number),
+            min = min(st_number), max = max(st_number))
 
 ggplot(st_data, aes(x = wb_length / 1000, y = st_number)) +
-  geom_point(aes(colour = lifestage), alpha = 0.7) +
-  geom_smooth(method = "loess", se = FALSE, colour = "black") +
+  geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 0.6) +  # straight line with its 95% CI band
+  geom_point(aes(colour = lifestage), alpha = 0.8, size = 2) +
   scale_x_log10() +
   scale_colour_brewer(palette = "Dark2", drop = FALSE) +   # keep the same colours as the other figures
+  expand_limits(y = c(40, 70)) +
   labs(x = "Whole-body length (mm, log scale)",
        y = "Approximate stichosome number", colour = "Lifestage")
 ```
@@ -1197,17 +1203,87 @@ ggplot(st_data, aes(x = wb_length / 1000, y = st_number)) +
 
 </details>
 
-Because the counts are approximate, a smooth curve and a clear statement of n are more honest than a precise statistical test.
-
 ::: {.callout .callout-read}
 ::: {.callout-title}
 How to read this
 :::
 
-- Each dot is one worm. The black line is a **loess smoother**: a flexible curve that follows the local average without assuming any shape in advance.
-- The count rises quickly with size, from a median of about **16 in L2** to about **36 in L4**, then **levels off at about 45 in adults**. In this simulation, most stichocytes are added before adulthood.
-- The small dip at the far right is an **edge effect** of the smoother, where there are few points. Don't read it as a real decline.
+- Each dot is one worm. The black line is a straight-line fit, and the grey band around it is its 95% confidence interval.
+- The medians sit between **54 and 57** in every group, from L2 to adults, while body length goes from under 1 mm to over 30 mm. The line is essentially flat.
+- The spread within each group (about 48 to 60) is similar at every stage: worms differ a little in their count, but not in a way that depends on size.
 - There are no L1 worms because stichosome number wasn't recorded for them. The L1 groups still appear in the legend so that the colours match the other figures.
+:::
+
+### 11.1 Is it really constant? Putting a number on "no change"
+
+::: {.callout .callout-why}
+::: {.callout-title}
+What this analysis does, and why it matters
+:::
+
+**What it does.** It fits a straight line of stichosome number against log10 body length, and reports the slope with its 95% confidence interval. The slope is the change in count for every **tenfold** increase in body length.
+
+**Why not just look at the p-value?** A large p-value only says the data are compatible with no change. It doesn't say the change is zero: a small study with very noisy counts would give a large p-value even if the number doubled. "Not significant" is **absence of evidence**, not **evidence of absence**.
+
+**What to look at instead.** The confidence interval. If the whole interval is close to zero, the data rule out any change big enough to matter. That *is* evidence that the number stays the same. (A formal version of this idea is called an **equivalence test**: you decide in advance how big a change would matter, and check that the interval falls entirely inside that range.)
+:::
+
+```{r stnumber-slope}
+fit_st_number <- lm(st_number ~ log10(wb_length), data = st_data)
+
+broom::tidy(fit_st_number, conf.int = TRUE) |>
+  filter(term == "log10(wb_length)")
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+# A tibble: 1 × 7
+  term             estimate std.error statistic p.value conf.low conf.high
+  <chr>               <dbl>     <dbl>     <dbl>   <dbl>    <dbl>     <dbl>
+1 log10(wb_length)   -0.833     0.720     -1.16   0.253    -2.28     0.612
+```
+
+</details>
+
+The slope is **−0.8 stichocytes per tenfold increase in length**, with a 95% CI of **−2.3 to 0.6**. The worms here span about a 50-fold range of length (1.7 tenfold steps), so even the ends of the interval allow a change of only about 4 cells out of 55. The count is effectively constant.
+
+### 11.2 So how does the stichosome grow?
+
+If the number of stichocytes stays the same while the stichosome gets longer, each stichocyte must get longer. Divide stichosome length by stichosome number to get the average length per cell:
+
+```{r stnumber-percell}
+st_data |>
+  drop_na(st) |>
+  mutate(um_per_stichocyte = st / st_number) |>
+  group_by(lifestage) |>
+  summarise(n_worms           = n(),
+            stichosome_um     = median(st),
+            st_number         = median(st_number),
+            um_per_stichocyte = median(um_per_stichocyte))
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+# A tibble: 5 × 5
+  lifestage    n_worms stichosome_um st_number um_per_stichocyte
+  <fct>          <int>         <dbl>     <dbl>             <dbl>
+1 L2                 6          294.      56                5.20
+2 L3                 8          660.      54.5             11.7 
+3 L4                11         2181       57               38.1 
+4 Adult female      17        13442.      54              251.  
+5 Adult male        13        11727.      56              211.  
+```
+
+</details>
+
+From L2 to adult, the stichosome gets about **40 times longer** (about 0.3 mm to 12 to 13 mm), while the number of cells stays at about 55. The length per stichocyte rises from about **5 µm to over 200 µm**: the stichosome grows by **enlarging a fixed set of cells**, not by adding new ones.
+
+::: {.callout .callout-tip}
+Like the other analyses in Sections 6 to 11, this treats every worm as independent and ignores mouse. With only a few worms per stage it is a description, not a definitive test. Section 13 shows how to bring mouse into a model like this one.
 :::
 
 ## 12. Worms within mice: the hierarchical structure
@@ -1901,7 +1977,7 @@ Dark-blue headers in the template are the core columns, and lighter ones are opt
 | `sex` | Female, Male, or blank if not sexed | Female |
 | `source` | Where the worm came from: `host` or `hatched in vitro` | host |
 | `wb_length_um`, `ant_nr_um`, `nr_st_um`, `st_um`, ... | One column per raw measurement, in µm, **numbers only** | 24980 |
-| `st_number` | Approximate stichosome number | 41 |
+| `st_number` | Approximate stichosome number | 55 |
 | `observer`, `measured_on` | Optional: who measured it and when (useful for checking measurement drift) | AB, 2026-03-14 |
 | `notes` | Free text for anything unusual | tail broken |
 
@@ -2119,8 +2195,8 @@ sim <- design |>
     rt_cl_pct     = p_rt_cl  * 100,
     rest_pct      = p_rest   * 100,
 
-    # approximate stichosome number: rises then levels off with body size
-    st_number = round(8 + 38 * (1 - exp(-wb_length / 4000)) + rnorm(n(), 0, 3)),
+    # approximate stichosome number: fixed early in development (about 50 to 60), whatever the body size
+    st_number = round(55 + rnorm(n(), 0, 2.5)),
 
     # which measurements did this worm get? (partial measurement)
     meas_set = base::sample(c("length_only", "head", "full"), n(),

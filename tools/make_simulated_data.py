@@ -87,7 +87,8 @@ df["ov_ts_pct"] = P[:, 4] * 100
 df["rt_cl_pct"] = P[:, 5] * 100
 df["rest_pct"] = P[:, 6] * 100
 
-df["st_number"] = np.round(8 + 38 * (1 - np.exp(-wb / 4000)) + rng.normal(0, 3, N))
+# stichosome number: fixed early in development (about 50 to 60), whatever the body size
+df["st_number"] = np.round(55 + rng.normal(0, 2.5, N))
 meas_set = rng.choice(["length_only", "head", "full"], size=N, p=[0.35, 0.25, 0.40])
 keep_st = (meas_set == "full") & (~df["lifestage"].isin(["L1 (newly hatched)", "L1"])) \
           & (rng.random(N) < 0.6)
