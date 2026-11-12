@@ -14,7 +14,7 @@ trichuris_muris_landmarks_messy.csv
   - Long headers with spaces and symbols; "% of Total" columns that can be calculated
   - Two stray trailing spaces in lifestage labels
   - Two transcription errors in the "Anterior body end to Entrance of St" column
-  Section 3 of the tutorial converts this file.
+  Section 3 of the tutorial looks at its problems (it is not converted).
 
 trichuris_muris_landmarks_tidy.csv
   The same 230 worms in the tidy layout of the template workbook. 230 rows x 16 columns.

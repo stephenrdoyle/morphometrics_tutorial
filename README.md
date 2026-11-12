@@ -89,7 +89,7 @@ The exercises at the end have hidden **Hint** boxes.
 3. Save the `data` sheet as **CSV UTF-8**, in the `data/` folder.
 4. Point Section 3.4 of the tutorial at your file, and run the rest.
 
-If your data are already in a different spreadsheet layout, Section 3 shows how to convert them.
+If your data are already in a different spreadsheet layout, rebuild them once in the template layout (Appendix B explains how). Section 3 shows the kinds of problem to look for in the original.
 
 ## Reproducibility
 
