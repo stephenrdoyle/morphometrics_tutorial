@@ -1,6 +1,7 @@
 ---
 title: "Landmark-based morphometrics in R with ggplot2"
 subtitle: "A beginner's tutorial using simulated *Trichuris muris* lifestage data, including mixed-effects models for worms nested within hosts"
+author: "Stephen Doyle"
 output:
   html_document:
     toc: true
