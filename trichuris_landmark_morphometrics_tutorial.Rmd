@@ -139,7 +139,7 @@ mean(x, na.rm = TRUE)      # 20: ignore the missing value
 is.na(x)                   # TRUE where a value is missing
 ```
 
-**Data frames (tibbles).** A spreadsheet-like table is a **data frame**. The tidyverse version is called a **tibble**. Each column is a vector, and `$` picks one column out.
+**Data frames (tibbles).** A spreadsheet-like table is a **data frame**. The tidyverse version is called a **tibble**. Each column is a vector. `toy$length` or `toy |> pull(length)` picks one column out. You will see both styles.
 
 ```{r r-basics-tibble}
 library(tidyverse)
@@ -147,7 +147,8 @@ toy <- tibble(sample = c("S1", "S2", "S3"),
               stage  = c("L1", "L1", "Adult"),
               length = c(220, 240, 25000))
 toy
-toy$length
+toy$length               # base R way to pick one column
+toy |> pull(length)      # tidyverse way: the same values
 ```
 
 **Factors.** A **factor** is a categorical variable with a fixed set of **levels** in a set order. Plots and models use that order, so we set it ourselves rather than accept the alphabetical one.
@@ -656,8 +657,10 @@ sim <- design |>
   )
 
 # Slip in two transcription errors (ant_st inflated) for the QC step to find
-ok_rows <- which(!is.na(sim$ant_st))
-sim$ant_st[ok_rows[c(7, 53)]] <- sim$ant_st[ok_rows[c(7, 53)]] * 1.6
+sim <- sim |>
+  mutate(ant_st_n = cumsum(!is.na(ant_st)),        # 1, 2, 3 ... counting only worms with ant_st
+         ant_st   = if_else(!is.na(ant_st) & ant_st_n %in% c(7, 53), ant_st * 1.6, ant_st)) |>
+  select(-ant_st_n)
 
 # Spreadsheet-style headers (what the real file looks like)
 raw_headers <- c(
@@ -684,11 +687,11 @@ worms_raw_sim <- sim |>
   set_names(raw_headers)
 
 # Two stray trailing spaces in the lifestage labels (a very common typo)
-worms_raw_sim$Lifestage[c(60, 140)] <- paste0(worms_raw_sim$Lifestage[c(60, 140)], " ")
+worms_raw_sim <- worms_raw_sim |>
+  mutate(Lifestage = if_else(row_number() %in% c(60, 140), str_c(Lifestage, " "), Lifestage))
 
 # Eight completely empty rows at the bottom, as often left behind in a spreadsheet
-empty_rows <- worms_raw_sim[rep(NA_integer_, 8), ]
-worms_raw_sim <- bind_rows(worms_raw_sim, empty_rows)
+worms_raw_sim <- bind_rows(worms_raw_sim, tibble(.rows = 8))
 
 dir.create("data", showWarnings = FALSE)
 write_csv(worms_raw_sim, "data/my_simulation_messy.csv", na = "")   # blank cells, like Excel
@@ -974,10 +977,11 @@ Do these checks **before** any plots or statistics.
 ### 5.1 Is `sample` a unique ID?
 
 ```{r qc-unique}
-n_distinct(worms$sample) == nrow(worms)
+worms |>
+  summarise(n_rows = n(), n_ids = n_distinct(sample), all_unique = n_ids == n_rows)
 ```
 
-This should be `TRUE`, confirming that each row is a different worm. If it is `FALSE`, the same ID appears on more than one row. Find out why before going further.
+`all_unique` should be `TRUE` (230 rows and 230 IDs), confirming that each row is a different worm. If it is `FALSE`, the same ID appears on more than one row. Find out why before going further.
 
 ### 5.2 Do the distances add up?
 
@@ -1035,7 +1039,7 @@ Among fully measured worms, the percentage columns (calculated in R from the len
 ```{r qc-pct}
 worms |>
   filter(!is.na(st_pct)) |>                          # fully measured worms
-  mutate(pct_sum = rowSums(across(all_of(pct_cols)), na.rm = TRUE)) |>
+  mutate(pct_sum = rowSums(pick(all_of(pct_cols)), na.rm = TRUE)) |>
   summarise(min = min(pct_sum), max = max(pct_sum))
 ```
 
@@ -1161,11 +1165,13 @@ worms |>
 ```
 
 ```{r fig-growth}
+dpi_breaks <- worms |> distinct(dpi) |> pull(dpi)     # one axis tick per sampling day
+
 p_growth <- ggplot(worms, aes(x = dpi, y = wb_length / 1000, colour = lifestage)) +
   # jitter x only (never jitter measurements); a fixed seed gives everyone the same picture
   geom_point(alpha = 0.6, position = position_jitter(width = 0.8, height = 0, seed = 1)) +
   scale_y_log10() +
-  scale_x_continuous(breaks = sort(unique(worms$dpi))) +
+  scale_x_continuous(breaks = dpi_breaks) +
   scale_colour_brewer(palette = "Dark2") +
   labs(x = "Days post infection (dpi)",
        y = "Whole-body length (mm, log scale)",
@@ -1589,11 +1595,11 @@ To see every fixed effect as a ratio at once, run `exp(fixef(fit_lmm))`.
 ### 11.3 How does accounting for mouse change the answers?
 
 ```{r lmm-se}
-se_compare <- tibble(
-  term    = names(coef(fit_lm)),
-  se_lm   = summary(fit_lm)$coefficients[, "Std. Error"],
-  se_lmer = summary(fit_lmm)$coefficients[, "Std. Error"]
-)
+# coef(summary(...)) is the model's coefficient table; as_tibble() makes it a tibble
+se_lm   <- coef(summary(fit_lm))  |> as_tibble(rownames = "term") |> select(term, se_lm   = `Std. Error`)
+se_lmer <- coef(summary(fit_lmm)) |> as_tibble(rownames = "term") |> select(term, se_lmer = `Std. Error`)
+
+se_compare <- left_join(se_lm, se_lmer, by = "term")
 se_compare
 ```
 
@@ -1689,16 +1695,19 @@ What this analysis does, and why it matters
 :::
 
 ```{r lmm-icc}
-vc  <- as.data.frame(VarCorr(fit_lmm))
-icc <- vc$vcov[vc$grp == "host_id"] / sum(vc$vcov)
-round(icc, 2)
+VarCorr(fit_lmm) |>
+  as_tibble() |>                       # one row per variance component: host_id, Residual
+  summarise(icc = round(vcov[grp == "host_id"] / sum(vcov), 2))
 ```
 
 <details class="expected-figure">
 <summary>Check your output: click to see what it should look like</summary>
 
 ```
-[1] 0.43
+# A tibble: 1 × 1
+    icc
+  <dbl>
+1  0.43
 ```
 
 </details>
@@ -1721,7 +1730,7 @@ What this analysis does, and why it matters
 
 ```{r fig-lmm-diag, fig.width=9, fig.height=3.8}
 diag_df <- tibble(fitted = fitted(fit_lmm), resid = resid(fit_lmm))
-re_df   <- tibble(effect = ranef(fit_lmm)$host_id[["(Intercept)"]])
+re_df   <- ranef(fit_lmm) |> as_tibble() |> rename(effect = condval)   # one row per mouse
 
 p_d1 <- ggplot(diag_df, aes(fitted, resid)) +
   geom_point(alpha = 0.6) +
@@ -1812,13 +1821,12 @@ fit_st_lm  <- lm(log10(length_um) ~ log10(wb_length), data = st_only)
 fit_st_lmm <- lmer(log10(length_um) ~ log10(wb_length) + (1 | host_id), data = st_only)
 
 slope_row <- function(model, label) {
-  ci <- if (inherits(model, "lm")) confint(model) else confint(model, parm = "beta_", method = "Wald")
-  # take the estimate out first: inside tibble(), `model` would mean the column created above
-  est <- summary(model)$coefficients["log10(wb_length)", "Estimate"]
-  tibble(model     = label,
-         slope     = est,
-         conf.low  = ci["log10(wb_length)", 1],
-         conf.high = ci["log10(wb_length)", 2])
+  estimates <- coef(summary(model)) |> as_tibble(rownames = "term")
+  intervals <- confint(model, method = "Wald") |> as_tibble(rownames = "term")   # lm() ignores `method`
+
+  left_join(estimates, intervals, by = "term") |>
+    filter(term == "log10(wb_length)") |>
+    transmute(model = label, slope = Estimate, conf.low = `2.5 %`, conf.high = `97.5 %`)
 }
 
 bind_rows(slope_row(fit_st_lm,  "lm (ignores mouse)"),
@@ -1927,10 +1935,13 @@ How to read this
 :::
 
 ```{r fig-pca}
-var_explained <- tibble(PC = paste0("PC", seq_along(pca$sdev)),
-                        variance = pca$sdev^2 / sum(pca$sdev^2))
+# share of the variation captured by each PC, as a tibble (columns PC, std.dev, percent, cumulative)
+var_explained <- broom::tidy(pca, matrix = "eigenvalues")
 
-pc_lab <- function(i) paste0("PC", i, " (", round(100 * var_explained$variance[i], 1), "%)")
+pc_lab <- function(i) {
+  share <- var_explained |> filter(PC == i) |> pull(percent)
+  str_glue("PC{i} ({round(100 * share, 1)}%)")
+}
 
 scores <- bind_cols(pca_data |> select(sample, any_of("host_id"), dpi, lifestage),
                     as_tibble(pca$x))
@@ -2015,17 +2026,16 @@ What this analysis does, and why it matters
 :::
 
 ```{r fig-shape-pca, fig.width=9}
-logs <- pca_data |>
+shape_data <- pca_data |>
+  mutate(across(all_of(pca_vars), log),                      # log every region length
+         log_size = rowMeans(pick(all_of(pca_vars))),         # one size number per worm
+         across(all_of(pca_vars), \(x) x - log_size))         # subtract it: what's left is shape
+
+shape_pca <- shape_data |>
   select(all_of(pca_vars)) |>
-  mutate(across(everything(), log))
+  prcomp()                            # the last PC will have ~zero variance: ignore it
 
-log_size   <- rowMeans(logs)                                  # a size measure per worm
-shape_logs <- logs |> mutate(across(everything(), \(x) x - log_size))
-
-shape_pca <- prcomp(shape_logs)       # the last PC will have ~zero variance: ignore it
-
-shape_scores <- bind_cols(pca_data |> select(sample, any_of("host_id"), lifestage),
-                          tibble(log_size = log_size),
+shape_scores <- bind_cols(shape_data |> select(sample, any_of("host_id"), lifestage, log_size),
                           as_tibble(shape_pca$x))
 
 p_shape1 <- ggplot(shape_scores, aes(x = PC1, y = PC2, colour = lifestage)) +
@@ -2161,8 +2171,9 @@ Store the model, then reuse the ICC code from Section 11.4:
 
 ```r
 fit_st_pct <- lmer(st_pct ~ lifestage + (1 | host_id), data = filter(worms, !is.na(host_id)))
-vc <- as.data.frame(VarCorr(fit_st_pct))
-vc$vcov[vc$grp == "host_id"] / sum(vc$vcov)
+VarCorr(fit_st_pct) |>
+  as_tibble() |>
+  summarise(icc = round(vcov[grp == "host_id"] / sum(vcov), 2))
 ```
 
 You should get an ICC of about **0.47**, compared with **0.43** for adult length in Section 11.4. So the stichosome share is at least as strongly clustered by mouse as length is.
