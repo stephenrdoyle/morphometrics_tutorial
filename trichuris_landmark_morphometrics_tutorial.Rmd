@@ -57,17 +57,18 @@ This tutorial assumes **no previous R experience**. By the end you will be able 
 - read a spreadsheet (CSV file) into R and spot the problems in an untidy lab sheet;
 - run quality-control checks that catch typing errors before any analysis;
 - make publication-quality figures with **ggplot2**;
-- describe growth, body proportions and allometry (how body regions scale with size);
+- describe growth, body proportions and allometry (how body regions scale with size), and analyse proportions with log-ratios;
 - summarise many measurements at once with **PCA**;
-- fit and interpret **mixed-effects models** when several worms come from the same mouse, and see how they change the conclusions.
+- fit and interpret **mixed-effects models** when several worms come from the same mouse, and see how they change the conclusions;
+- fit a **growth curve** over time and turn its parameters into biology: final size, and when growth is fastest.
 
-**How long it takes.** Plan on about **6 to 8 hours**, spread over three sessions:
+**How long it takes.** Plan on about **7 to 9 hours**, spread over three sessions:
 
 | Session | Sections | Topic |
 |---|---|---|
 | 1 | Getting started (and Appendix A if you are new to R), 0 to 5 | R basics, tidy data, importing, quality control |
 | 2 | 6 to 11 | The worms: growth, body plan, scaling, sex differences, PCA, stichosome number |
-| 3 | 12 to 15 | The mice: worms within hosts, mixed models; combined figure, exercises |
+| 3 | 12 to 16 | The mice: worms within hosts, mixed models, growth curves; combined figure, exercises |
 
 At the start of each new session, re-run the earlier code first (see *Run All Chunks Above* below), because R forgets everything when it is closed.
 
@@ -614,7 +615,7 @@ How the analysis is organised
 
 **Sections 6 to 11 focus on the worms**: growth, body plan, scaling, sex differences, PCA and stichosome number. They treat every worm as an independent observation, which is the simplest way to see the patterns.
 
-**Sections 12 and 13 then bring in the mice.** Worms from the same mouse tend to resemble each other, so they are not fully independent. Section 12 shows this in the data, and Section 13 uses mixed-effects models to revisit the sex, growth and scaling comparisons while accounting for mouse. You will see which conclusions hold, and how much less certain some of them become.
+**Sections 12 and 13 then bring in the mice.** Worms from the same mouse tend to resemble each other, so they are not fully independent. Section 12 shows this in the data, and Section 13 uses mixed-effects models to revisit the sex, growth and scaling comparisons while accounting for mouse. You will see which conclusions hold, and how much less certain some of them become. **Section 14** then fits a growth curve through all the timepoints, with mouse included.
 :::
 
 Every worm has `wb_length`, so this plot uses all of them.
@@ -767,6 +768,147 @@ Read the two rows together:
 
 ::: {.callout .callout-warning}
 Don't fix the size problem with a log axis. On a log scale each stacked segment's height no longer matches its length, so the stack becomes misleading. Use separate panels, as here, or plot each region on its own (Section 8).
+:::
+
+### 7.2 Percentages are parts of a whole
+
+The percentages in Section 7 always add up to 100. That sounds harmless, but it means they are **not free to vary independently**: if one region's share goes up, the others *must* go down, whatever the biology. Data like these are called **compositional data**, and they need some care once you go beyond describing them.
+
+::: {.callout .callout-why}
+::: {.callout-title}
+What this analysis does, and why it matters
+:::
+
+**The problem.** Percentages have three quirks:
+
+1. **They manufacture negative correlations.** Because the shares add to 100, they tend to be negatively correlated even when the regions themselves are completely unrelated. A negative correlation between two percentages can look like a biological trade-off ("worms with a bigger stichosome have a smaller intestine") when it is just arithmetic.
+2. **They depend on what else is in the whole.** The stichosome's share changes if you add or remove another region from the total, even though the stichosome itself hasn't changed. In L1 and L2 the ovary/testis can't be measured and its space is absorbed into "rest of body" (Section 7), so the percentages of the early stages aren't strictly comparable with the later ones.
+3. **They are squeezed between 0 and 100**, so their spread depends on their mean, which linear models don't expect.
+
+**The fix: log-ratios.** Compare regions **with each other** as ratios, on the log scale. The ratio of stichosome to intestine doesn't care what else is in the body, and logs of ratios are unbounded. The most common version is the **centred log-ratio (CLR)**: each region's log length minus the worm's mean log length. That is exactly what Section 10.1 did to remove size, so you have already used it.
+
+**Why it matters.** Body proportions are central to morphometrics, and percentages are the obvious way to express them. Used for description, as in the bars of Section 7, they are fine. Correlated or modelled, they can produce patterns that aren't there and hide ones that are. Compositional data analysis is standard in geology and microbiome studies, and less well known in morphometrics.
+:::
+
+**First, a demonstration with made-up numbers.** Three body regions whose lengths are drawn completely independently, so they have no relationship at all:
+
+```{r comp-demo}
+set.seed(1)
+toy <- tibble(a = rlnorm(1000, log(10), 0.2),   # three independent lengths, each about 10
+              b = rlnorm(1000, log(10), 0.2),
+              c = rlnorm(1000, log(10), 0.2))
+
+toy_pct <- toy / rowSums(toy) * 100               # each region as % of the total
+
+round(cor(toy), 2)       # correlations between the lengths
+round(cor(toy_pct), 2)   # correlations between the percentages
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+      a    b    c
+a 1.00 0.01 0.05
+b 0.01 1.00 0.02
+c 0.05 0.02 1.00
+      a     b     c
+a  1.00 -0.52 -0.48
+b -0.52  1.00 -0.50
+c -0.48 -0.50  1.00
+```
+
+</details>
+
+The lengths are uncorrelated (all about 0), as they should be. The percentages all correlate at about **−0.5**, purely because they must add to 100. With more regions the effect is weaker, but when one region dominates, as the stichosome does in adults, it is strong.
+
+**Now the real data.** In adult females, how do the stichosome and intestine vary together?
+
+```{r comp-cor}
+worms |>
+  filter(lifestage == "Adult female", !is.na(st_pct), !is.na(intestine_pct)) |>
+  summarise(n_worms          = n(),
+            cor_percentages  = cor(st_pct, intestine_pct),
+            cor_lengths      = cor(log(st), log(intestine)))
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+# A tibble: 1 × 3
+  n_worms cor_percentages cor_lengths
+    <int>           <dbl>       <dbl>
+1      21          -0.745       0.426
+```
+
+</details>
+
+The two correlations point in **opposite directions**. The lengths correlate positively (0.43): a bigger female tends to have both a longer stichosome and a longer intestine, simply because she is bigger. The percentages correlate negatively (−0.75), which would suggest a trade-off between the two organs. Most of that is the arithmetic from the demonstration: the stichosome takes up more than half the body, so a worm whose stichosome is a little longer than usual has every other share squeezed. A negative correlation between percentages is not, on its own, evidence of a trade-off.
+
+**Comparing groups: percentages against log-ratios.** Do adult males and females differ in their body proportions? We test each region twice: once as a percentage, and once as a centred log-ratio. To keep the comparison fair, both use the same worms (adults with all seven regions measured), and both treat every worm as independent, as in Sections 6 to 11.
+
+```{r comp-compare}
+regions <- names(segment_labels)   # all seven regions, ov_ts included (adults have one)
+
+adult_comp <- worms |>
+  filter(stage == "Adult") |>
+  drop_na(all_of(regions)) |>
+  pivot_longer(all_of(regions), names_to = "region", values_to = "length_um") |>
+  group_by(sample) |>                                         # within each worm:
+  mutate(pct = 100 * length_um / sum(length_um),             #   % of the seven regions (adds to 100)
+         clr = log(length_um) - mean(log(length_um))) |>     #   centred log-ratio
+  ungroup() |>
+  mutate(region = factor(region, levels = regions, labels = segment_labels))
+
+sex_test <- function(d, response) {
+  lm(reformulate("sex", response), data = d) |>   # e.g. pct ~ sex
+    broom::tidy() |>
+    filter(term == "sexMale") |>
+    select(estimate, p.value)
+}
+
+adult_comp |>
+  group_by(region) |>
+  group_modify(\(d, key) bind_cols(
+    sex_test(d, "pct") |> rename(pct_diff = estimate, pct_p = p.value),
+    sex_test(d, "clr") |> rename(clr_diff = estimate, clr_p = p.value))) |>
+  ungroup() |>
+  mutate(pct_diff       = round(pct_diff, 2),
+         male_vs_female = round(exp(clr_diff), 2),            # CLR difference as a ratio
+         across(c(pct_p, clr_p), \(p) if_else(p < 0.001, "<0.001", sprintf("%.2g", p)))) |>
+  select(region, pct_diff, pct_p, male_vs_female, clr_p)
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+# A tibble: 7 × 5
+  region             pct_diff pct_p  male_vs_female clr_p 
+  <fct>                 <dbl> <chr>           <dbl> <chr> 
+1 Anterior end to NR     0.02 0.89             1.04 0.12  
+2 NR to St entrance     -0.12 0.24             1    0.92  
+3 Stichosome             0.5  0.62             1.04 0.21  
+4 Intestine              0.67 0.19             1.08 0.0044
+5 Ovary / testis        -5.76 <0.001           0.51 <0.001
+6 Rectum / cloaca       -0.07 0.21             1    0.84  
+7 Rest of body           4.77 <0.001           1.68 <0.001
+```
+
+</details>
+
+::: {.callout .callout-read}
+::: {.callout-title}
+How to read this
+:::
+
+- `pct_diff` is how many **percentage points** larger the region's share is in males than in females. `male_vs_female` is the CLR difference as a **ratio**: how much longer the region is in males, relative to the worm's average region. 1.08 means 8% longer.
+- **Both methods agree on the big differences.** Males have a much smaller testis than females have ovary (5.8 points less; a ratio of 0.51, about half), and a much longer rest of body (4.8 points more; a ratio of 1.68).
+- **They disagree on the intestine.** As a percentage, the male intestine is 0.67 points larger, with p = 0.19: no evidence of a difference. As a log-ratio it is 8% longer, with p = 0.004. The simulation did build in a small real difference (males 19% of the body, females 18%, Appendix C), and the log-ratio picks it up while the percentage misses it.
+- **But log-ratios need care too.** A CLR compares each region with the worm's *average* region. When the ovary/testis halves and the rest of body grows by two thirds, that average shifts, and every other region's CLR moves by about 3%. That is why the stichosome shows 1.04 even though the simulation gave it exactly the same share in both sexes. Part of the intestine's 8% is this shift. When your question is about one specific pair of regions, use a simple log-ratio such as `log(intestine / st)` (Exercise 8).
+
+**In practice:** use percentages to **describe** a body plan (Section 7's bars), and log-ratios to **correlate, model or test** proportions. Always say what each ratio is relative to.
 :::
 
 ## 8. Scaling: do regions grow in proportion to the whole worm?
@@ -1109,7 +1251,7 @@ How to read this
 
 ### 10.1 Removing size to see shape only
 
-Because size dominates PC1, shape differences are hidden in later axes. A simple way to focus on shape is to divide out size: subtract each worm's **mean log length** from every one of its log region lengths. What remains is the worm's relative proportions.
+Because size dominates PC1, shape differences are hidden in later axes. A simple way to focus on shape is to divide out size: subtract each worm's **mean log length** from every one of its log region lengths. What remains is the worm's relative proportions. (This is the centred log-ratio from Section 7.2.)
 
 ::: {.callout .callout-why}
 ::: {.callout-title}
@@ -1342,7 +1484,7 @@ worms |>
   filter(n_dpi > 1)             # should return zero rows
 ```
 
-Zero rows means the nesting is clean. If your real design has mice contributing at several timepoints, the model structure changes (see Section 16).
+Zero rows means the nesting is clean. If your real design has mice contributing at several timepoints, the model structure changes (see Section 17).
 
 ### 12.3 Do mice differ from each other?
 
@@ -1756,7 +1898,268 @@ In the simulation, mice differ in their relative stichosome length, so worms fro
 - **Degrees of freedom.** `lmerTest` and `emmeans` use approximations (Satterthwaite or Kenward-Roger) that reflect the number of mice. Report which was used. This tutorial sets `lmer.df = "satterthwaite"` in `emmeans()` so that everyone gets the same numbers: otherwise `emmeans` picks Kenward-Roger when the `pbkrtest` package happens to be installed, and Satterthwaite (with a message) when it isn't.
 - **Write the model down.** For example: "log body length ~ sex × timepoint + (1 | mouse), fitted with lme4 and lmerTest in R".
 
-## 14. A combined figure
+## 14. Growth curves: modelling length over time
+
+Section 6 described growth one sampling day at a time, and Section 13.6 estimated a mean for each group. Neither says anything about **between** the sampling days, or gives a single summary of how the worms grow. A **growth curve** does: it fits one smooth line through all the timepoints, and its parameters are things a biologist wants to know, such as the final adult size and when growth is fastest.
+
+### 14.1 The idea
+
+On a log scale (Section 6), body length follows an S-shape over time: slow in the first days, fastest in the middle of larval development, then levelling off in adults. A **logistic curve** has exactly that shape. On the log scale it has four parameters:
+
+| Parameter | What it is | Read from the plot in Section 6 |
+|---|---|---|
+| `lo` | The lower plateau, the size the curve levels off towards on the left | below the L1 larvae: log(200 µm) ≈ 5.3 |
+| `hi` | The upper plateau: **final adult size** | about adult size: log(30,000 µm) ≈ 10.3 |
+| `xmid` | The day half way between the plateaus, when **relative growth is fastest** | somewhere around 20 dpi |
+| `scal` | How spread out growth is in time: larger means slower, more drawn-out growth | about 5 days |
+
+We add one more parameter, `male_diff`, which lowers the upper plateau for males. Larvae can't be sexed, so they all sit on the same curve, and the sex difference is estimated from the adults.
+
+::: {.callout .callout-why}
+::: {.callout-title}
+What this analysis does, and why it matters
+:::
+
+**What it does.** It fits a **nonlinear model**: the curve's shape is fixed in advance (here, logistic), and R finds the parameter values that bring the curve closest to the data (least squares, as for a straight line). Unlike `lm()`, there is no formula for the answer, so R searches step by step, starting from **starting values** that you supply. Then it fits the same curve with a mouse random effect, just as `lmer()` did in Section 13.
+
+**Why it matters.** The parameters summarise the whole growth trajectory in a few numbers with confidence intervals: "females level off at about 45 mm, males about 23% shorter, and relative growth peaks at about 14 dpi". These numbers can be compared directly between groups, for example between mouse strains, or treated and untreated mice, which is often the real question. The curve also gives the **growth rate** at any day, including days you didn't sample.
+
+**The catch.** A curve is only as good as the timepoints behind it. Anything it says beyond your last sampling day is an **extrapolation**, and the upper plateau usually is one (Section 14.5).
+:::
+
+We use the worms with a mouse (`worms_g` from Section 13.6), so the newly hatched larvae are left out, and add a 0/1 column for males:
+
+```{r gc-data}
+# the logistic curve on the log scale, written as an R function
+growth_curve <- function(dpi, lo, hi, xmid, scal) {
+  lo + (hi - lo) / (1 + exp((xmid - dpi) / scal))
+}
+
+gc_data <- worms_g |>
+  mutate(male = as.numeric(sex %in% "Male"))   # 1 for adult males, 0 for everyone else
+```
+
+### 14.2 Fit the curve, ignoring mouse
+
+`nls()` fits a nonlinear model by least squares. The formula says: log length follows `growth_curve()`, with the upper plateau lowered by `male_diff` for males. `start` gives the starting values read off the Section 6 plot (in the table above).
+
+```{r gc-nls}
+fit_gc_nls <- nls(log(wb_length) ~ growth_curve(dpi, lo, hi + male_diff * male, xmid, scal),
+                  data  = gc_data,
+                  start = c(lo = 5.3, hi = 10.3, xmid = 20, scal = 5, male_diff = -0.25))
+coef(fit_gc_nls)
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+       lo        hi      xmid      scal male_diff 
+ 4.4865922 10.5837058 15.2919063  8.6310004 -0.2355828 
+```
+
+</details>
+
+The starting values were rough, but the fit moved well away from them: `xmid` from 20 to about 15 days, `scal` from 5 to about 9. That is normal. Starting values only need to be close enough for R to find its way.
+
+::: {.callout .callout-tip}
+::: {.callout-title}
+If the fit fails
+:::
+
+`nls()` can stop with errors such as `singular gradient` or `step factor reduced below minFactor`. These almost always mean the starting values are too far off, or the curve has more parameters than the data can support. Plot the data, read better starting values off the plot, and try again. If it still fails, try a simpler curve. **Always plot the fitted curve over the data** (Section 14.4): a curve can converge and still be nonsense.
+:::
+
+### 14.3 Add the mouse
+
+As in Section 13, worms from the same mouse resemble each other. `nlme()` from the **nlme** package (installed with R, so there is nothing new to install) fits nonlinear **mixed** models. We add a parameter `mouse`, a random shift of log length for each mouse, which is the same "each mouse has its own baseline" idea as `(1 | host_id)`. The estimates from `nls()` are the starting values.
+
+```{r gc-nlme}
+fit_gc <- nlme::nlme(log(wb_length) ~ growth_curve(dpi, lo, hi + male_diff * male, xmid, scal) + mouse,
+                     data   = gc_data,
+                     fixed  = lo + hi + xmid + scal + male_diff ~ 1,   # one value of each for everyone
+                     random = mouse ~ 1 | host_id,                     # a shift for each mouse
+                     start  = coef(fit_gc_nls))
+
+nlme::intervals(fit_gc, which = "fixed")
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+Approximate 95% confidence intervals
+
+ Fixed effects:
+               lower       est.      upper
+lo         3.3368237  4.0937149  4.8506060
+hi        10.4745987 10.7174892 10.9603797
+xmid      12.5540939 14.4966223 16.4391508
+scal       7.8620111  9.6892411 11.5164712
+male_diff -0.2963098 -0.2611253 -0.2259409
+```
+
+</details>
+
+(We write `nlme::nlme()` and `nlme::intervals()`, naming the package each time, rather than loading nlme with `library()`. Loading it would hide some lme4 functions used in Section 13 behind nlme versions with the same name.)
+
+Logs are hard to talk about, so turn the parameters into biological quantities:
+
+```{r gc-summary}
+gc_ci <- nlme::intervals(fit_gc, which = "fixed")$fixed   # columns lower, est., upper
+
+tibble(
+  quantity = c("Final length, females (mm)",
+               "Final length, males / females",
+               "Day of fastest relative growth (dpi)",
+               "Peak growth rate (% longer per day)"),
+  estimate = c(exp(gc_ci["hi", "est."]) / 1000,
+               exp(gc_ci["male_diff", "est."]),
+               gc_ci["xmid", "est."],
+               100 * (gc_ci["hi", "est."] - gc_ci["lo", "est."]) / (4 * gc_ci["scal", "est."])),
+  lower    = c(exp(gc_ci["hi", "lower"]) / 1000, exp(gc_ci["male_diff", "lower"]), gc_ci["xmid", "lower"], NA),
+  upper    = c(exp(gc_ci["hi", "upper"]) / 1000, exp(gc_ci["male_diff", "upper"]), gc_ci["xmid", "upper"], NA)
+)
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+# A tibble: 4 × 4
+  quantity                             estimate  lower  upper
+  <chr>                                   <dbl>  <dbl>  <dbl>
+1 Final length, females (mm)             45.1   35.4   57.5  
+2 Final length, males / females           0.770  0.744  0.798
+3 Day of fastest relative growth (dpi)   14.5   12.6   16.4  
+4 Peak growth rate (% longer per day)    17.1   NA     NA    
+```
+
+</details>
+
+::: {.callout .callout-read}
+::: {.callout-title}
+How to read this
+:::
+
+- **Final length.** Females level off at about **45 mm** (95% CI 35 to 58 mm). The interval is wide, and the whole estimate lies beyond the data (Section 14.5).
+- **Sex.** Males level off at **0.77** of the female length, about 23% shorter (CI 20 to 26%). That agrees with Section 13.3, where females were about 27% longer than males (1 ÷ 1.27 = 0.79).
+- **Fastest relative growth** is at about **14.5 dpi** (CI 12.6 to 16.4), around the L3 stage, when the worms get about **17% longer every day**.
+- The peak growth rate has no confidence interval here, because it combines three parameters (`hi`, `lo` and `scal`). Getting one needs more advanced methods, such as bootstrapping.
+- Compare with `nls()` (Section 14.2): the estimates moved a little once the mouse was included, and the intervals now reflect the number of mice, as in Section 13.
+:::
+
+### 14.4 Plot the curve
+
+Predict the curve on a fine grid of days, for females and males, then draw it over the data. Panel B shows the **growth rate**: how much the log length changes from one day to the next, times 100, which is roughly "% longer per day". We draw the curves to 60 dpi on purpose, to show what the model claims beyond the data.
+
+```{r fig-growthcurve, fig.width=10, fig.height=4.5}
+gc_est <- nlme::fixef(fit_gc)   # the fitted parameters: lo, hi, xmid, scal, male_diff
+
+gc_pred <- expand_grid(dpi = seq(0, 60, by = 0.1), sex = c("Female", "Male")) |>
+  mutate(male    = as.numeric(sex == "Male"),
+         log_len = growth_curve(dpi, gc_est["lo"], gc_est["hi"] + gc_est["male_diff"] * male,
+                                gc_est["xmid"], gc_est["scal"])) |>
+  group_by(sex) |>
+  mutate(rate = 100 * (log_len - lag(log_len)) / 0.1) |>   # change in log length per day, as %
+  ungroup() |>
+  filter(sex == "Female" | dpi >= 21)    # sexes can't be told apart before L4 (21 dpi)
+
+# grey band: days after the last sampling day
+beyond_data <- annotate("rect", xmin = 42, xmax = 60, ymin = -Inf, ymax = Inf, fill = "grey90")
+
+p_gc1 <- ggplot() +
+  annotate("rect", xmin = 42, xmax = 60, ymin = 0, ymax = Inf, fill = "grey90") +   # 0 is -Inf on a log axis
+  geom_point(data = gc_data, aes(dpi, wb_length / 1000, colour = coalesce(as.character(sex), "Larva")),
+             alpha = 0.5, position = position_jitter(width = 0.8, height = 0, seed = 1)) +
+  geom_line(data = gc_pred, aes(dpi, exp(log_len) / 1000, linetype = sex), linewidth = 0.8) +
+  scale_y_log10() +
+  scale_colour_manual(values = c(Larva = "grey50", Female = "#E6AB02", Male = "#A6761D"),
+                      breaks = c("Larva", "Female", "Male")) +
+  labs(x = "Days post infection (dpi)", y = "Whole-body length (mm, log scale)",
+       colour = "Worms", linetype = "Curve", title = "A. Fitted growth curve")
+
+p_gc2 <- ggplot(filter(gc_pred, !is.na(rate)), aes(dpi, rate, linetype = sex)) +
+  beyond_data +
+  geom_line(linewidth = 0.8) +
+  geom_vline(xintercept = gc_est["xmid"], linetype = "dotted") +
+  labs(x = "Days post infection (dpi)", y = "Growth rate (% longer per day)",
+       linetype = "Curve", title = "B. Growth rate") +
+  theme(legend.position = "none")
+
+p_gc1 + p_gc2 + plot_layout(widths = c(3, 2))
+```
+
+<details class="expected-figure">
+<summary>Check your figure: click to see what it should look like</summary>
+
+![Expected result. The same image is in the project folder as `expected_figures/fig-growthcurve.png`.](expected_figures/fig-growthcurve.png)
+
+</details>
+
+::: {.callout .callout-read}
+::: {.callout-title}
+How to read this
+:::
+
+- **Panel A.** The solid line is the female curve, and the dashed line the male curve. The male curve is drawn from 21 dpi (L4), the first stage that can be sexed. The sex difference was estimated from the adults only.
+- The curve runs through the middle of most groups. Section 14.5 checks how closely.
+- **The grey zone** is beyond the last sampling day. The curve keeps rising towards its plateau there, but no worm was measured.
+- **Panel B.** The growth rate peaks at about 17% per day around 14 to 15 dpi (dotted line), then falls. By 42 dpi the worms are still growing about 3 to 4% per day, which is why the plateau lies beyond the data.
+- This is the **relative** growth rate (% per day). In mm per day, growth peaks later, because a 4% increase in a 25 mm adult is far more length than 17% of a 1 mm larva.
+:::
+
+### 14.5 Check the fit, and know its limits
+
+Residuals are how far each worm sits from the curve (on the log scale, so 0.1 is about 10%). Average them by group: if the curve fits, each group's average should be near 0.
+
+```{r gc-resid}
+gc_data |>
+  mutate(resid = resid(fit_gc, level = 0)) |>   # level = 0: the population curve, without mouse shifts
+  group_by(dpi, lifestage) |>
+  summarise(n_worms = n(), mean_resid = round(mean(resid), 3), .groups = "drop")
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+# A tibble: 8 × 4
+    dpi lifestage    n_worms mean_resid
+  <dbl> <fct>          <int>      <dbl>
+1     3 L1                20     -0.021
+2     9 L2                20      0.05 
+3    14 L3                25      0.027
+4    21 L4                25     -0.09 
+5    35 Adult female      30      0.11 
+6    35 Adult male        30      0.098
+7    42 Adult female      25     -0.089
+8    42 Adult male        25     -0.083
+```
+
+</details>
+
+The averages are all within about ±0.1 (10%), but they are **not random**. L4 at 21 dpi sits about 9% below the curve, the adults at 35 dpi about 10% above it, and the adults at 42 dpi about 9% below it. A pattern like this, rather than scattered noise, means the curve's shape doesn't quite match the data:
+
+- The jump from L4 to adult is bigger than a smooth curve allows (limit 3 below).
+- From 35 to 42 dpi the worms grow less than the curve predicts. Growth may be slowing faster than the logistic shape assumes, so the real final size may be **smaller** than 45 mm.
+
+None of this makes the curve useless: it is still a fair summary of the overall trend. But it is a reason to report the plateau cautiously.
+
+::: {.callout .callout-warning}
+::: {.callout-title}
+Four limits to keep in mind
+:::
+
+1. **The final size is an extrapolation.** The last sampling day is 42 dpi, where females average about 29 mm. The plateau of about 45 mm comes from the *shape* of the curve, not from worms anyone measured. Its confidence interval assumes the logistic shape is right. To pin it down you need later timepoints (Exercise 7 shows how much it depends on the last one).
+2. **Few timepoints.** Here 6 sampling days support 5 parameters. That works, but there's no room for anything more complex, such as a separate curve shape for each sex.
+3. **Nematodes grow in steps.** Growth happens mainly between moults, so a smooth curve is a simplification. It describes the overall trend, not the moults.
+4. **`lo` is not the size at hatching.** exp(4.09) is about 60 µm, smaller than any worm: it is where the curve would level off long before hatching. To get the size at hatching, ask the curve for its prediction at 0 dpi: `exp(growth_curve(0, gc_est["lo"], gc_est["hi"], gc_est["xmid"], gc_est["scal"]))` gives about 200 µm. The newly hatched larvae, which weren't used in the fit, measure about 225 µm, so this is a fair check, and the curve passes it reasonably well.
+
+The alternative is a smooth curve with no fixed shape (a GAM, `mgcv::gam(log(wb_length) ~ s(dpi, k = 5) + s(host_id, bs = "re"))`, with `host_id` as a factor). It is easier to fit and assumes less, but it has no parameters to interpret and can't say anything beyond the last timepoint. It is a good check on the logistic curve.
+:::
+
+## 15. A combined figure
 
 ```{r fig-combined, fig.width=11, fig.height=9}
 # the composition bars get the full width, so their two-line labels have room
@@ -1781,7 +2184,7 @@ ggsave("figures/figure1.png", figure1, width = 11, height = 9, dpi = 300)
 ggsave("figures/figure1.pdf", figure1, width = 11, height = 9)
 ```
 
-## 15. Practice exercises
+## 16. Practice exercises
 
 Try each exercise yourself first. Open the green **Hint** box only if you are stuck. Write your answers in new chunks: put the cursor on an empty line and press `Ctrl + Alt + I` (`Cmd + Option + I` on a Mac) to insert one.
 
@@ -1862,20 +2265,61 @@ The number of mice per timepoint is set in one line of the simulation chunk, the
 
 </details>
 
-**7. Your data.** Put your data in the template layout (Appendix B), point Section 3.4 at your CSV, and run Sections 3.4 to 15. Before that, try the checks from Section 3.1 to 3.3 on your original sheet: what problems do they turn up?
+**7. How much does the final size depend on the last timepoint?** Refit the growth curve from Section 14.3 without the 42 dpi worms. How does the estimated final length of females change?
 
-## 16. Where to go next
+<details class="hint">
+<summary>Hint</summary>
+
+Filter the data, then reuse the model code with the new data:
+
+```r
+gc_no42 <- filter(gc_data, dpi < 42)
+
+fit_gc_no42 <- nlme::nlme(log(wb_length) ~ growth_curve(dpi, lo, hi + male_diff * male, xmid, scal) + mouse,
+                          data   = gc_no42,
+                          fixed  = lo + hi + xmid + scal + male_diff ~ 1,
+                          random = mouse ~ 1 | host_id,
+                          start  = coef(fit_gc_nls))
+
+exp(nlme::intervals(fit_gc_no42, which = "fixed")$fixed["hi", ]) / 1000   # final length (mm)
+```
+
+Without the 42 dpi worms, the estimated female final length jumps to about **236 mm** (95% CI 44 to 1,260 mm), against 45 mm with them. Up to 35 dpi the data show hardly any slowing down, so the curve has almost nothing to tell it where the plateau is, and the estimate becomes meaningless. A growth curve's final size is only as good as your latest timepoints: if final size matters, keep sampling until growth has clearly stopped.
+
+</details>
+
+**8. A log-ratio for one pair of regions.** In Section 7.2, every centred log-ratio shifts a little when some regions change a lot between the sexes. When the question is about one pair of regions, a simple log-ratio avoids that. Is the intestine longer relative to the stichosome in males than in females? Model `log(intestine / st)` against `sex` in adults.
+
+<details class="hint">
+<summary>Hint</summary>
+
+```r
+adults_ratio <- worms |> filter(stage == "Adult", !is.na(st), !is.na(intestine))
+fit_ratio <- lm(log(intestine / st) ~ sex, data = adults_ratio)
+exp(cbind(estimate = coef(fit_ratio), confint(fit_ratio)))["sexMale", ]
+```
+
+You should get about **1.03** (95% CI 0.94 to 1.13, p = 0.51), from 41 worms: relative to the stichosome, the male intestine is about 3% longer, and the interval includes no difference.
+
+The simulation built in a true difference of about 6% (intestine 19% against 18% of the body, stichosome 52% in both, Appendix C). That is too small to detect reliably with 41 worms, especially as stichosome length also varies between mice, which makes it a noisy reference. The 8% difference from the centred log-ratio in Section 7.2 was partly this real difference and partly the shift in the worm's average region. Every log-ratio answers the question "relative to what?", so choose the one that matches your question.
+
+</details>
+
+**9. Your data.** Put your data in the template layout (Appendix B), point Section 3.4 at your CSV, and run Sections 3.4 to 15. Before that, try the checks from Section 3.1 to 3.3 on your original sheet: what problems do they turn up?
+
+## 17. Where to go next
 
 - **Random slopes.** If the effect of sex or timepoint differs between mice, use `(1 + sex | host_id)` (needs enough worms per mouse and enough mice).
 - **More levels of grouping.** If mice come from several experiments, cages or batches, nest the random effects: `(1 | experiment/host_id)`, or `(1 | experiment) + (1 | host_id)` if mice appear in only one experiment.
 - **Worms with no host.** For in vitro hatched larvae, a `batch` column (hatching date or egg batch) can play the role of `host_id`, so they can be included in the mixed models.
 - **Mice sampled repeatedly.** If a mouse contributes worms at more than one timepoint, the dpi comparison becomes within-mouse, which changes the model and the power. Check Section 12.2 on your real data.
-- **Growth curves.** Fit a smooth growth model of length against dpi with a mouse random effect (`mgcv::gam` with `s(host_id, bs = "re")`, or a nonlinear mixed model).
+- **Other growth curves.** Section 14 used a logistic curve. Gompertz and von Bertalanffy curves have different shapes and are worth comparing (`AIC()` helps choose between models fitted to the same data). A smooth curve with no fixed shape (`mgcv::gam`, with `s(host_id, bs = "re")` for mouse) is a useful check.
+- **More compositional methods.** The `compositions` package has isometric log-ratios (for models with several regions at once) and ways to handle regions that are zero or missing, such as the ovary/testis in young larvae.
 - **Very few mice.** Bayesian models (`brms`) handle small numbers of mice more transparently than classical mixed models.
 - **True geometric morphometrics.** If you digitise landmark coordinates from images, the `geomorph` package (Procrustes superimposition, then PCA on shape) is the standard route.
 - **Classifying groups.** If you want to ask how well measurements discriminate lifestages or species, look at `MASS::lda()` or the `MorphoTools2` package.
 
-## 17. Reproducibility
+## 18. Reproducibility
 
 Record the R and package versions with your results:
 

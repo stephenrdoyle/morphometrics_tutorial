@@ -13,13 +13,14 @@ It is written for **postgraduate students with little or no R experience**. You 
 - Reading a spreadsheet into R, and spotting the problems in an untidy lab sheet
 - Quality-control checks that catch typing errors before any analysis
 - Publication-quality figures with **ggplot2**
-- Growth, body proportions and allometry (how body regions scale with body size)
+- Growth, body proportions and allometry (how body regions scale with body size), and log-ratios for analysing proportions
 - **Principal component analysis (PCA)**, including separating size from shape
 - **Mixed-effects models** for worms nested within mice, and how accounting for the mouse changes the conclusions
+- **Growth curves** over time, with mouse included: final size, and when growth is fastest
 
 It also covers how to lay out your own data so that analysis is easy (Appendix B). An Excel template is included.
 
-**Time needed:** about 6 to 8 hours, best spread over three sessions.
+**Time needed:** about 7 to 9 hours, best spread over three sessions.
 
 ## Download
 
@@ -93,7 +94,7 @@ If your data are already in a different spreadsheet layout, rebuild them once in
 
 ## Reproducibility
 
-The tutorial and expected outputs were generated with R 4.5.0 on macOS, with tidyverse 2.0.0, ggplot2 4.0.3, lme4 2.0-6, lmerTest 3.2-1, emmeans 2.0.4, patchwork 1.3.2 and ggrepel 0.9.8. Random elements (jittered points, label placement) use fixed seeds, so the figures should match exactly. A PCA axis may occasionally come out mirror-imaged on a different computer. That doesn't change the interpretation, and the tutorial says so where it matters.
+The tutorial and expected outputs were generated with R 4.5.0 on macOS, with tidyverse 2.0.0, ggplot2 4.0.3, lme4 2.0-6, lmerTest 3.2-1, nlme 3.1-168, emmeans 2.0.4, patchwork 1.3.2 and ggrepel 0.9.8. Random elements (jittered points, label placement) use fixed seeds, so the figures should match exactly. A PCA axis may occasionally come out mirror-imaged on a different computer. That doesn't change the interpretation, and the tutorial says so where it matters.
 
 The practice data can be regenerated exactly with `python tools/make_simulated_data.py` (requires numpy and pandas; fixed seed 2026).
 

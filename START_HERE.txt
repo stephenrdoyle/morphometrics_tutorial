@@ -2,7 +2,7 @@ Trichuris muris landmark morphometrics tutorial (RStudio project)
 ==================================================================
 
 0. New to R? Install R and RStudio first (instructions under "Getting started" at the top of the tutorial),
-   then work through Appendix A, "R in ten minutes" (at the end of the tutorial), before Section 0. Allow about 6 to 8 hours over three sessions.
+   then work through Appendix A, "R in ten minutes" (at the end of the tutorial), before Section 0. Allow about 7 to 9 hours over three sessions.
 1. Double-click  trichuris_morphometrics_tutorial.Rproj  to open the project in RStudio.
 2. Open  trichuris_landmark_morphometrics_tutorial.Rmd  and follow the tutorial.
    - Run chunks one at a time (green play button, or Ctrl/Cmd + Shift + Enter), or
