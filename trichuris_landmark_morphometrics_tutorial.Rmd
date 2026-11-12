@@ -54,20 +54,20 @@ details.hint > summary { cursor: pointer; font-weight: 600; color: #2d7d12; }
 
 This tutorial assumes **no previous R experience**. By the end you will be able to:
 
-- read a spreadsheet (CSV file) into R and turn an untidy lab sheet into a tidy table;
+- read a spreadsheet (CSV file) into R and spot the problems in an untidy lab sheet;
 - run quality-control checks that catch typing errors before any analysis;
 - make publication-quality figures with **ggplot2**;
 - describe growth, body proportions and allometry (how body regions scale with size);
-- fit and interpret **mixed-effects models** when several worms come from the same mouse;
-- summarise many measurements at once with **PCA**.
+- summarise many measurements at once with **PCA**;
+- fit and interpret **mixed-effects models** when several worms come from the same mouse, and see how they change the conclusions.
 
 **How long it takes.** Plan on about **6 to 8 hours**, spread over three sessions:
 
 | Session | Sections | Topic |
 |---|---|---|
 | 1 | Getting started (and Appendix A if you are new to R), 0 to 5 | R basics, tidy data, importing, quality control |
-| 2 | 6 to 10 | Hosts, growth, body plan, scaling, sex differences |
-| 3 | 11 to 15 | Mixed models, PCA, combined figures, exercises |
+| 2 | 6 to 11 | The worms: growth, body plan, scaling, sex differences, PCA, stichosome number |
+| 3 | 12 to 15 | The mice: worms within hosts, mixed models; combined figure, exercises |
 
 At the start of each new session, re-run the earlier code first (see *Run All Chunks Above* below), because R forgets everything when it is closed.
 
@@ -158,7 +158,7 @@ About the Lifestage column in the practice file
 The practice file's `Lifestage` column has these values: "L1 – newly hatched", "L1", "L2", "L3", "L4", "Adult – Female" and "Adult – Male". This is a common way lab sheets are kept. Two things to notice:
 
 1. **"Adult – Female" combines two variables.** The tidy file has separate `lifestage` and `sex` columns. In future sheets, give each its own column, as the template does.
-2. **"L1 – newly hatched" and "L1" are two groups in one column.** This tutorial treats them as separate groups. If "newly hatched" means hatched from eggs in vitro (not recovered from a mouse), those larvae have no host, which affects the mixed models (Sections 6 and 11). Record that in the `source` column.
+2. **"L1 – newly hatched" and "L1" are two groups in one column.** This tutorial treats them as separate groups. If "newly hatched" means hatched from eggs in vitro (not recovered from a mouse), those larvae have no host, which affects the mixed models (Sections 12 and 13). Record that in the `source` column.
 
 Lab sheets also often end with a run of **blank rows**. The practice file has eight. If they are empty spreadsheet rows, they can be deleted. If they are worms whose lifestage wasn't recorded, the lifestage should be filled in. Section 3.2 checks which.
 :::
@@ -205,9 +205,9 @@ Assumptions to check against your real data
 :::
 
 1. **Lengths are in µm.** If yours are in mm, only the axis labels change.
-2. **Each row is one individual worm** (not a repeat measurement of the same worm). Worms that share a host are still *not statistically independent*, which is why the host ID matters (Sections 6 and 11).
+2. **Each row is one individual worm** (not a repeat measurement of the same worm). Worms that share a host are still *not statistically independent*, which is why the host ID matters (Sections 12 and 13).
 3. **"L1 – newly hatched" larvae were hatched in vitro**, so they have `dpi = 0` and no host. If that is wrong for your data, find out which grouping they do belong to (for example a hatching batch) and use it in place of `host_id`.
-4. **Each mouse is sampled at one timepoint** (mice are culled to collect worms), so mice are *nested within* dpi. Section 6 includes a check.
+4. **Each mouse is sampled at one timepoint** (mice are culled to collect worms), so mice are *nested within* dpi. Section 12 includes a check.
 5. **The regions partition the body**, so the lengths add up to the whole-body length (and the `*_pct` columns calculated from them add up to about 100%). If your regions overlap (for example intestine running alongside the reproductive tract), they won't, and you should not treat the percentages as a composition. Section 5.3 tests this.
 6. **The abbreviations** (NR = nerve ring, Os = oesophagus, St = stichosome, Int = intestine, Ov/Ts = ovary/testis, Rt/Cl = rectum/cloaca) are those used in this tutorial. Check that they match the ones used in your lab.
 :::
@@ -225,7 +225,7 @@ Sizes, proportions and mouse effects are invented to give realistic-looking patt
 Adding your real host column later
 :::
 
-If your data doesn't have a host column yet, you can still work through everything except Sections 6 and 11. The template already includes a `host_id` column. If you are rebuilding an existing sheet in the template layout, fill in `host_id` as you go. Columns are matched by **name**, not position, so nothing else needs changing.
+If your data doesn't have a host column yet, you can still work through everything except Sections 12 and 13. The template already includes a `host_id` column. If you are rebuilding an existing sheet in the template layout, fill in `host_id` as you go. Columns are matched by **name**, not position, so nothing else needs changing.
 :::
 
 ## 1. Setup
@@ -236,7 +236,7 @@ Install the packages once:
 install.packages(c("tidyverse", "patchwork", "emmeans", "lmerTest", "ggrepel", "rmarkdown", "knitr"))
 ```
 
-(`lmerTest` also installs `lme4`, which fits the mixed models. `ggrepel` is used once, to stop labels overlapping in Section 12.)
+(`lmerTest` also installs `lme4`, which fits the mixed models. `ggrepel` is used once, to stop labels overlapping in Section 10.)
 
 ::: {.callout .callout-tip}
 ::: {.callout-title}
@@ -605,108 +605,17 @@ Here they sum to ~100, so the regions partition the body. **If your real data do
 Because the percentages are calculated from the lengths (Section 3.5), they can never disagree with them. This check is really testing the **lengths themselves**: do the regions you recorded add up to `wb_length`? That is why it is worth keeping.
 :::
 
-## 6. Worms within mice: the hierarchical structure
+## 6. Growth: body length over time
 
-So far we have treated every worm as an independent replicate. But the worms were collected from **mice**, and worms from the same mouse share a host environment (immune response, worm burden, how long the infection has run, diet and so on). That makes them more alike than worms from different mice.
-
-### 6.1 How many mice, and how many worms per mouse?
-
-```{r host-counts}
-worms |>
-  filter(!is.na(host_id)) |>
-  count(dpi, host_id) |>
-  group_by(dpi) |>
-  summarise(n_mice        = n_distinct(host_id),
-            n_worms       = sum(n),
-            min_per_mouse = min(n),
-            max_per_mouse = max(n))
-```
-
-<details class="expected-figure">
-<summary>Check your output: click to see what it should look like</summary>
-
-```
-# A tibble: 6 × 5
-    dpi n_mice n_worms min_per_mouse max_per_mouse
-  <dbl>  <int>   <int>         <int>         <int>
-1     3      4      20             4             7
-2     9      4      20             4             6
-3    14      5      25             3             7
-4    21      5      25             3             8
-5    35      5      60             9            14
-6    42      5      50             5            14
-```
-
-</details>
-
-Notice how few mice there are at each timepoint compared with the number of worms. **The number of mice, not the number of worms, is what limits how confidently you can compare timepoints.**
-
-Some worms have no host at all. Check which:
-
-```{r}
-worms |> filter(is.na(host_id)) |> count(dpi, lifestage)
-```
-
-These are the newly hatched larvae, which were hatched in vitro. They cannot be given a mouse random effect, and **mixed-effects models silently drop rows with a missing grouping variable**. In Section 11 we therefore filter them out explicitly, so you can see which worms each model uses. (If they share a hatching batch, a `batch` column could serve as their grouping variable instead.)
-
-### 6.2 Is each mouse sampled at only one timepoint?
-
-The models in Section 11 assume mice are *nested* within timepoints (each mouse contributes to a single dpi). Check that this holds:
-
-```{r host-nesting}
-worms |>
-  filter(!is.na(host_id)) |>
-  group_by(host_id) |>
-  summarise(n_dpi = n_distinct(dpi)) |>
-  filter(n_dpi > 1)             # should return zero rows
-```
-
-Zero rows means the nesting is clean. If your real design has mice contributing at several timepoints, the model structure changes (see Section 16).
-
-### 6.3 Do mice differ from each other?
-
-To see mouse-to-mouse variation across all stages on one axis, express each worm's length **relative to the average for its lifestage and timepoint** (1 = typical). If worms were independent, each mouse's worms would scatter evenly around 1.
-
-```{r fig-mouse-clustering, fig.width=10}
-worms <- worms |>
-  group_by(dpi, lifestage) |>
-  mutate(rel_length = wb_length / mean(wb_length)) |>
-  ungroup()
-
-worms |>
-  filter(!is.na(host_id)) |>
-  ggplot(aes(x = host_id, y = rel_length)) +
-  geom_hline(yintercept = 1, linetype = "dashed") +
-  geom_point(aes(colour = lifestage), alpha = 0.7,
-             position = position_jitter(width = 0.15, height = 0, seed = 1)) +
-  stat_summary(fun = mean, fun.min = mean, fun.max = mean,
-               geom = "crossbar", width = 0.6, linewidth = 0.3) +   # mean per mouse
-  scale_colour_brewer(palette = "Dark2", drop = FALSE) +
-  facet_grid(. ~ dpi, scales = "free_x", space = "free_x", labeller = label_both) +
-  labs(x = "Mouse", y = "Body length relative to lifestage average", colour = "Lifestage") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-```
-
-<details class="expected-figure">
-<summary>Check your figure: click to see what it should look like</summary>
-
-![Expected result. The same image is in the project folder as `expected_figures/fig-mouse-clustering.png`.](expected_figures/fig-mouse-clustering.png)
-
-</details>
-
-::: {.callout .callout-read}
+::: {.callout .callout-note}
 ::: {.callout-title}
-How to read this
+How the analysis is organised
 :::
 
-- Each column is one mouse, and each dot is one of its worms. Panels are timepoints (dpi).
-- The y-axis is each worm's length divided by the average for its lifestage and timepoint: **1** (dashed line) is average, **1.2** means 20% longer than average, and **0.8** means 20% shorter.
-- The short horizontal bar is the **mean for that mouse**. If mice didn't matter, every bar would sit close to 1.
+**Sections 6 to 11 focus on the worms**: growth, body plan, scaling, sex differences, PCA and stichosome number. They treat every worm as an independent observation, which is the simplest way to see the patterns.
+
+**Sections 12 and 13 then bring in the mice.** Worms from the same mouse tend to resemble each other, so they are not fully independent. Section 12 shows this in the data, and Section 13 uses mixed-effects models to revisit the sex, growth and scaling comparisons while accounting for mouse. You will see which conclusions hold, and how much less certain some of them become.
 :::
-
-Some mice have all their worms above 1 and others below. This is **clustering**: knowing which mouse a worm came from tells you something about its size. Ignoring that treats, say, 25 worms from 5 mice as if they were 25 independent pieces of evidence. This error is called **pseudoreplication**, and it makes confidence intervals too narrow and p-values too small.
-
-## 7. Growth: body length over time
 
 Every worm has `wb_length`, so this plot uses all of them.
 
@@ -753,10 +662,10 @@ How to read this
 - Each dot is one worm, coloured by lifestage. Dots are spread a little sideways (jittered) so they don't hide each other. Their **height is never changed**.
 - Worms grow about **130-fold**, from about 0.23 mm at hatching to about 29 mm in adult females at 42 dpi.
 - Each larval step (L1 to L2, L2 to L3, L3 to L4) multiplies length by about 2.2 to 2.8 times. The biggest jump is from L4 (21 dpi) to adult (35 dpi), about 5.6-fold in females, over a longer gap of 14 days.
-- At 35 and 42 dpi, adult females (yellow) sit above males (brown): females are longer. Section 10 looks at this properly.
+- At 35 and 42 dpi, adult females (yellow) sit above males (brown): females are longer. Section 9 looks at this properly.
 :::
 
-## 8. Body plan: how proportions change across lifestages
+## 7. Body plan: how proportions change across lifestages
 
 Which fraction of the body is stichosome, intestine and so on at each stage? A stacked bar of the mean percentages answers this. It uses fully measured worms only, and we show how many that is.
 
@@ -795,7 +704,7 @@ p_comp
 
 </details>
 
-In the L1 and L2 groups the ovary/testis can't be measured, so that space is absorbed into "Rest of body". Interpret the early bars with that in mind. This figure is descriptive: any formal comparison of proportions between groups should also account for mouse (Section 11).
+In the L1 and L2 groups the ovary/testis can't be measured, so that space is absorbed into "Rest of body". Interpret the early bars with that in mind. This figure is descriptive: any formal comparison of proportions between groups should also account for mouse (Section 13).
 
 ::: {.callout .callout-read}
 ::: {.callout-title}
@@ -808,7 +717,7 @@ How to read this
 - These are means, so they hide the variation between worms. Exercise 3 models one of these percentages formally.
 :::
 
-### 8.1 Relative versus absolute length
+### 7.1 Relative versus absolute length
 
 Every bar above reaches 100%, so the plot shows the **shape** of the body plan but hides how **big** each worm is. Stacking the mean region lengths in mm (the same fully measured worms) shows the other half of the story. Adults are about 100 times longer than newly hatched L1 larvae, so on one shared axis the larvae would be invisible. We therefore give larvae and adults their own panel and axis.
 
@@ -854,13 +763,13 @@ Read the two rows together:
 
 - **Relative (top)**: the stichosome's *share* rises from about 38% to over 50%. The worm is changing shape.
 - **Absolute (bottom)**: every region gets longer, by very different amounts. The stichosome grows from under 0.1 mm in a newly hatched L1 to over 10 mm in an adult female. The total height of each bar is the mean body length of these worms.
-- A region can lose share while still growing in absolute length. The intestine does exactly that (compare its slope below 1 in Section 9).
+- A region can lose share while still growing in absolute length. The intestine does exactly that (compare its slope below 1 in Section 8).
 
 ::: {.callout .callout-warning}
-Don't fix the size problem with a log axis. On a log scale each stacked segment's height no longer matches its length, so the stack becomes misleading. Use separate panels, as here, or plot each region on its own (Section 9).
+Don't fix the size problem with a log axis. On a log scale each stacked segment's height no longer matches its length, so the stack becomes misleading. Use separate panels, as here, or plot each region on its own (Section 8).
 :::
 
-## 9. Scaling: do regions grow in proportion to the whole worm?
+## 8. Scaling: do regions grow in proportion to the whole worm?
 
 If a region grows at the same rate as the whole body, its share stays constant. If it grows faster or slower, its share changes. This is **allometry**. On log-log axes, the slope of a region's length against whole-body length tells you which:
 
@@ -879,7 +788,7 @@ What this analysis does, and why it matters
 
 **Why use logs of both lengths?** Growth is multiplicative: a region that is always 40% of the body doubles when the body doubles. Biologists describe this with a **power law**, region = a × body^b. Taking logs of both sides turns it into a straight line, log(region) = log(a) + b × log(body), so the **slope of the log-log line is the exponent b**. A slope of 1 means the region keeps its proportion; above 1, it gets relatively bigger as the worm grows.
 
-**Why it matters.** Percentages (Section 8) show *that* proportions change, but not *how fast* each region grows relative to the body. A slope with a confidence interval puts a number on it, and lets you test it against 1. Allometric slopes are the standard way to compare growth patterns between regions, stages, sexes or species, because they don't depend on the size of the animals you happened to measure.
+**Why it matters.** Percentages (Section 7) show *that* proportions change, but not *how fast* each region grows relative to the body. A slope with a confidence interval puts a number on it, and lets you test it against 1. Allometric slopes are the standard way to compare growth patterns between regions, stages, sexes or species, because they don't depend on the size of the animals you happened to measure.
 
 **Confidence intervals.** A **95% confidence interval** is the range of values that are reasonably compatible with the data. If you repeated the whole study many times, about 95% of the intervals calculated this way would contain the true value. A narrow interval means the estimate is precise. If the interval excludes a value of interest (here, 1), the data give good evidence against that value.
 :::
@@ -987,7 +896,7 @@ How to read this
 - Each point is one region's slope. The horizontal line through it is the **95% confidence interval**: the range of slopes that fit the data well. The dashed line at 1 is isometry.
 - If an interval does **not** cross the dashed line, that region clearly does not scale isometrically. Only "rest of body" (0.98, interval 0.96 to 1.00) is close to isometric.
 - The steepest slope is the **ovary/testis (about 1.5)**: gonads barely exist in larvae and grow fast late in development. The **stichosome (1.08)** grows a little faster than the body, so it gains share.
-- The head regions (anterior end to NR 0.78, NR to St 0.83), the intestine (0.88) and the rectum/cloaca (0.83) grow more slowly than the body, so they lose share. That is the same pattern as the stacked bars in Section 8, now with a number and an uncertainty attached.
+- The head regions (anterior end to NR 0.78, NR to St 0.83), the intestine (0.88) and the rectum/cloaca (0.83) grow more slowly than the body, so they lose share. That is the same pattern as the stacked bars in Section 7, now with a number and an uncertainty attached.
 - The intervals look very narrow because this analysis treats every worm as independent and pools all stages. See the cautions below.
 :::
 
@@ -998,12 +907,12 @@ Three cautions
 
 1. **Parts of a whole are not independent.** The regions sum to the body length, so if one takes a bigger share, others must shrink. Don't over-interpret one slope in isolation.
 2. **These slopes pool all lifestages.** They mix within-stage growth with the step changes between stages. To ask "does the region scale within adults?", repeat the model on one stage at a time.
-3. **These confidence intervals ignore mouse.** Section 11.7 refits one slope with a mouse random effect.
+3. **These confidence intervals ignore mouse.** Section 13.7 refits one slope with a mouse random effect.
 :::
 
-## 10. Sex differences in adults: look at the data
+## 9. Sex differences in adults: look at the data
 
-Males and females can only be compared in the adult stages. We start by plotting the data with n, then model it in Section 11.
+Males and females can only be compared in the adult stages. We start by plotting the data with n, then model it in Section 13.
 
 ```{r fig-sex}
 adults <- worms |>
@@ -1039,14 +948,372 @@ How to read this
 
 - In a **boxplot**, the thick line is the **median** (the middle worm). The box holds the **middle 50%** of worms, and the whiskers reach the furthest worms that aren't unusually far out. The dots are the individual worms; the boxplot's own outlier points are switched off because every worm is already drawn.
 - Females are longer at both timepoints: median about **24.8 mm against 19.1 mm** at 35 dpi, and **28.5 mm against 22.4 mm** at 42 dpi. Both sexes are longer at 42 dpi than at 35 dpi.
-- The boxes for the two sexes hardly overlap, which suggests a clear difference. But this plot treats every worm as independent. Section 11 tests it while allowing for mouse.
+- The boxes for the two sexes hardly overlap, which suggests a clear difference. But this plot treats every worm as independent. Section 13 tests it while allowing for mouse.
 :::
 
-In this design, **both sexes come from each mouse**, so sex is compared *within* mice, while timepoint (35 vs 42 dpi) is compared *between* mice. This distinction matters in the next section.
+In this design, **both sexes come from each mouse**, so sex is compared *within* mice, while timepoint (35 vs 42 dpi) is compared *between* mice. This distinction matters when we model the sex difference while accounting for mouse in Section 13.
 
-## 11. Mixed-effects models: accounting for host
+## 10. Multivariate analysis: PCA across lifestages
 
-### 11.1 The idea
+PCA summarises several region lengths at once, so we can see overall development and which regions drive it. **PCA needs complete rows**, so choose your variables with the missingness map in mind.
+
+::: {.callout .callout-why}
+::: {.callout-title}
+What this analysis does, and why it matters
+:::
+
+**What it does.** Each worm has six region lengths, so it is a point in a six-dimensional space, which you can't draw. **Principal component analysis (PCA)** finds new axes through that cloud of points. The first, **PC1**, points in the direction along which the worms differ most. **PC2** is the direction of the next-largest difference, at right angles to PC1, and so on. Each PC is a weighted combination of the original measurements; the weights are called **loadings**. Plotting PC1 against PC2 is like turning the cloud until you find the most informative view of it.
+
+**Why log and scale the data?** Logs make PCA about **proportional** differences, as in Section 8. **Scaling** (`scale. = TRUE`) gives every region the same weight. Without it, long regions such as the stichosome would dominate simply because their numbers are bigger.
+
+**Why it matters.** Six measurements that are all strongly related carry much less than six separate pieces of information. PCA shows how many independent patterns there really are, which groups separate, and which measurements drive the separation, without running a separate test for every measurement. It is **descriptive**: it shows patterns but does not test them. To test whether groups differ on a PC, use the scores in a model (Exercise 4).
+:::
+
+Choices made here:
+
+- Use the **region lengths** (not the `*_pct` columns, which carry the same information as the lengths, and not `wb_length` or `ant_st`, which are sums of the others).
+- **Leave out `ov_ts`**, because it is structurally missing in L1 and L2. Including it would remove whole lifestages from the analysis.
+- Use **log-transformed** lengths and scale them.
+
+```{r pca}
+pca_vars <- c("ant_nr", "nr_st", "st", "intestine", "rt_cl", "rest")
+
+pca_data <- worms |>
+  select(sample, any_of("host_id"), dpi, lifestage, stage, all_of(pca_vars)) |>
+  drop_na(all_of(pca_vars))      # only the variables in the PCA: host_id may legitimately be NA
+
+nrow(pca_data)                 # how many worms contribute?
+count(pca_data, lifestage)     # ... and from which stages?
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+[1] 95
+# A tibble: 7 × 2
+  lifestage              n
+  <fct>              <int>
+1 L1 (newly hatched)    13
+2 L1                     9
+3 L2                     7
+4 L3                    13
+5 L4                    12
+6 Adult female          21
+7 Adult male            20
+```
+
+</details>
+
+::: {.callout .callout-warning}
+The PCA uses only the **fully measured subset**. Check that every lifestage is still represented in reasonable numbers, as above. If one stage vanished, conclusions about it would be impossible. Also avoid filling gaps with the mean: that shrinks variation and distorts the axes.
+
+Note that `drop_na()` is restricted to the PCA variables. A bare `drop_na()` would also remove worms whose `host_id` is missing (the newly hatched larvae), which is not what we want here.
+:::
+
+```{r}
+pca <- pca_data |>
+  select(all_of(pca_vars)) |>
+  mutate(across(everything(), log10)) |>
+  prcomp(scale. = TRUE)
+
+summary(pca)
+```
+
+::: {.callout .callout-read}
+::: {.callout-title}
+How to read this
+:::
+
+- **Standard deviation** is how spread out the worms are along each principal component (PC). **Proportion of Variance** is the share of all the variation that PC captures, and **Cumulative Proportion** is the running total.
+- **PC1 captures 99.6%**. Almost all the variation among these worms is **size**: a big worm has big everything. That is expected when lengths span a 100-fold range.
+- PC2 captures only 0.17%. It describes small differences in proportions, which is the shape. Section 10.1 removes size to look at shape directly.
+:::
+
+```{r fig-pca}
+# share of the variation captured by each PC, as a tibble (columns PC, std.dev, percent, cumulative)
+var_explained <- broom::tidy(pca, matrix = "eigenvalues")
+
+pc_lab <- function(i) {
+  share <- var_explained |> filter(PC == i) |> pull(percent)
+  str_glue("PC{i} ({round(100 * share, 1)}%)")
+}
+
+scores <- bind_cols(pca_data |> select(sample, any_of("host_id"), dpi, lifestage),
+                    as_tibble(pca$x))
+
+p_pca <- ggplot(scores, aes(x = PC1, y = PC2, colour = lifestage)) +
+  geom_point(size = 2, alpha = 0.8) +
+  stat_ellipse(level = 0.9) +
+  scale_colour_brewer(palette = "Dark2") +
+  labs(x = pc_lab(1), y = pc_lab(2), colour = "Lifestage")
+
+p_pca
+```
+
+<details class="expected-figure">
+<summary>Check your figure: click to see what it should look like</summary>
+
+![Expected result. The same image is in the project folder as `expected_figures/fig-pca.png`.](expected_figures/fig-pca.png)
+
+</details>
+
+Expect PC1 to be mostly **overall size**, ordering worms from L1 through adults, because all regions grow together. PC2 and later axes describe how the proportions differ.
+
+::: {.callout .callout-read}
+::: {.callout-title}
+How to read this
+:::
+
+- Each dot is one worm. Each ellipse encloses roughly 90% of a group, to show where most of its worms lie.
+- **PC1** orders the worms by lifestage, from L1 (left) to adults (right): it is size. Newly hatched and 3 dpi L1 larvae overlap, because they are almost the same size.
+- **PC2** separates adult males (above 0) from adult females (below). The loadings plot below shows why.
+- The two axes are on very different scales: PC2 spans about 0.4 units and PC1 about 7. The plot stretches PC2 so you can see it.
+- The direction of a PC is arbitrary: flipping its sign gives exactly the same analysis. If your plot is a **mirror image** of the expected one, that is fine.
+:::
+
+```{r fig-loadings, fig.height=4}
+loadings <- as_tibble(pca$rotation, rownames = "region")
+loadings
+
+ggplot(loadings, aes(x = PC1, y = PC2)) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  geom_vline(xintercept = 0, linetype = "dotted") +
+  geom_segment(aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.2, "cm"))) +
+  # labels stacked to the right of the arrow tips, joined to them by thin lines
+  ggrepel::geom_text_repel(aes(x = PC1, y = PC2, label = region),
+                           nudge_x = 0.2, direction = "y", hjust = 0,
+                           min.segment.length = 0, segment.colour = "grey60", seed = 1) +
+  coord_cartesian(xlim = c(-0.8, 0.9)) +
+  labs(x = pc_lab(1), y = pc_lab(2))
+```
+
+<details class="expected-figure">
+<summary>Check your figure: click to see what it should look like</summary>
+
+![Expected result. The same image is in the project folder as `expected_figures/fig-loadings.png`.](expected_figures/fig-loadings.png)
+
+</details>
+
+::: {.callout .callout-read}
+::: {.callout-title}
+How to read this
+:::
+
+- Each arrow is one region. Its **loadings** (where the arrow points) say how much that region contributes to PC1 and PC2.
+- All the arrows reach the same distance to the right: every region has a PC1 loading of about **0.41**. PC1 is all regions together, **overall size**.
+- PC2 is dominated by **rest of body** (pointing up, 0.88), against the rectum/cloaca and the head regions (pointing down). A worm high on PC2 has a relatively long rest of body.
+- Adult males have a longer rest of body than females (about 12% against 8%, Section 7), so males sit higher on PC2 in the score plot.
+:::
+
+### 10.1 Removing size to see shape only
+
+Because size dominates PC1, shape differences are hidden in later axes. A simple way to focus on shape is to divide out size: subtract each worm's **mean log length** from every one of its log region lengths. What remains is the worm's relative proportions.
+
+::: {.callout .callout-why}
+::: {.callout-title}
+What this analysis does, and why it matters
+:::
+
+**What it does.** For each worm, it calculates one size number (the mean of its log region lengths) and subtracts it from every log length. Subtracting on the log scale is the same as dividing on the original scale, so what remains is each region **relative to the worm's overall size**. A PCA of these values describes shape only.
+
+**Why it matters.** Separating **size** from **shape** is the central problem of morphometrics. Two worms can differ simply because one is bigger, or because their body plans really differ. Ordinary PCA mixes the two, and size usually swamps everything else, as PC1's 99.6% showed. Removing size first reveals the body-plan differences, such as stage and sex differences in proportions. Plotting shape against size then asks directly whether shape changes as worms grow.
+:::
+
+```{r fig-shape-pca, fig.width=9}
+shape_data <- pca_data |>
+  mutate(across(all_of(pca_vars), log),                      # log every region length
+         log_size = rowMeans(pick(all_of(pca_vars))),         # one size number per worm
+         across(all_of(pca_vars), \(x) x - log_size))         # subtract it: what's left is shape
+
+shape_pca <- shape_data |>
+  select(all_of(pca_vars)) |>
+  prcomp()                            # the last PC will have ~zero variance: ignore it
+
+shape_scores <- bind_cols(shape_data |> select(sample, any_of("host_id"), lifestage, log_size),
+                          as_tibble(shape_pca$x))
+
+p_shape1 <- ggplot(shape_scores, aes(x = PC1, y = PC2, colour = lifestage)) +
+  geom_point(size = 2, alpha = 0.8) +
+  scale_colour_brewer(palette = "Dark2") +
+  labs(x = "Shape PC1", y = "Shape PC2", colour = "Lifestage")
+
+p_shape2 <- ggplot(shape_scores, aes(x = log_size, y = PC1, colour = lifestage)) +
+  geom_point(size = 2, alpha = 0.8) +
+  scale_colour_brewer(palette = "Dark2") +
+  labs(x = "Size (mean log length)", y = "Shape PC1", colour = "Lifestage")
+
+p_shape1 + p_shape2 + plot_layout(guides = "collect")
+```
+
+<details class="expected-figure">
+<summary>Check your figure: click to see what it should look like</summary>
+
+![Expected result. The same image is in the project folder as `expected_figures/fig-shape-pca.png`.](expected_figures/fig-shape-pca.png)
+
+</details>
+
+The right-hand panel asks: **does shape change with size?** A clear trend means development changes body proportions (allometry), not just size.
+
+::: {.callout .callout-read}
+::: {.callout-title}
+How to read this
+:::
+
+- With size removed, shape PC1 captures about **83%** of the remaining variation and shape PC2 about **10%**. Run `summary(shape_pca)` to see this.
+- **Left panel.** Shape PC1 still runs from larvae (left) to adults (right): body proportions change step by step through development. Shape PC2 separates adult females (above) from males (below).
+- **Right panel.** Shape PC1 rises steadily with size (correlation about 0.96): bigger worms have a different shape. This is the allometry from Section 8 seen again. Run `shape_pca$rotation` to see that shape PC1 is mainly the stichosome (+0.71) and rest of body (+0.37) against the anterior end to NR (−0.48).
+- Within the adults (top right), shape differs mainly by **sex**, not by size: most of the size-related change in shape happens between stages.
+- As with any PCA, an axis may come out mirror-imaged on another computer. That doesn't change the interpretation.
+:::
+
+::: {.callout .callout-note}
+PCA itself ignores mouse. To test group differences in PC scores while accounting for host, treat a PC score as the response in a mixed model, for example `lmer(PC1 ~ lifestage + (1 | host_id), data = filter(shape_scores, !is.na(host_id)))`. Section 13 introduces these models, and Exercise 4 tries this one.
+:::
+
+## 11. Stichosome number
+
+`st_number` is an approximate count, measured in only a subset of worms. We treat it descriptively: plot it against body length and show who contributed.
+
+```{r fig-stnumber}
+st_data <- worms |> drop_na(st_number)
+
+count(st_data, lifestage)
+
+ggplot(st_data, aes(x = wb_length / 1000, y = st_number)) +
+  geom_point(aes(colour = lifestage), alpha = 0.7) +
+  geom_smooth(method = "loess", se = FALSE, colour = "black") +
+  scale_x_log10() +
+  scale_colour_brewer(palette = "Dark2", drop = FALSE) +   # keep the same colours as the other figures
+  labs(x = "Whole-body length (mm, log scale)",
+       y = "Approximate stichosome number", colour = "Lifestage")
+```
+
+<details class="expected-figure">
+<summary>Check your figure: click to see what it should look like</summary>
+
+![Expected result. The same image is in the project folder as `expected_figures/fig-stnumber.png`.](expected_figures/fig-stnumber.png)
+
+</details>
+
+Because the counts are approximate, a smooth curve and a clear statement of n are more honest than a precise statistical test.
+
+::: {.callout .callout-read}
+::: {.callout-title}
+How to read this
+:::
+
+- Each dot is one worm. The black line is a **loess smoother**: a flexible curve that follows the local average without assuming any shape in advance.
+- The count rises quickly with size, from a median of about **16 in L2** to about **36 in L4**, then **levels off at about 45 in adults**. In this simulation, most stichocytes are added before adulthood.
+- The small dip at the far right is an **edge effect** of the smoother, where there are few points. Don't read it as a real decline.
+- There are no L1 worms because stichosome number wasn't recorded for them. The L1 groups still appear in the legend so that the colours match the other figures.
+:::
+
+## 12. Worms within mice: the hierarchical structure
+
+Every analysis so far (growth, body plan, scaling, sex differences, PCA and stichosome number) has treated each worm as an independent replicate. But the worms were collected from **mice**, and worms from the same mouse share a host environment (immune response, worm burden, how long the infection has run, diet and so on). That makes them more alike than worms from different mice.
+
+### 12.1 How many mice, and how many worms per mouse?
+
+```{r host-counts}
+worms |>
+  filter(!is.na(host_id)) |>
+  count(dpi, host_id) |>
+  group_by(dpi) |>
+  summarise(n_mice        = n_distinct(host_id),
+            n_worms       = sum(n),
+            min_per_mouse = min(n),
+            max_per_mouse = max(n))
+```
+
+<details class="expected-figure">
+<summary>Check your output: click to see what it should look like</summary>
+
+```
+# A tibble: 6 × 5
+    dpi n_mice n_worms min_per_mouse max_per_mouse
+  <dbl>  <int>   <int>         <int>         <int>
+1     3      4      20             4             7
+2     9      4      20             4             6
+3    14      5      25             3             7
+4    21      5      25             3             8
+5    35      5      60             9            14
+6    42      5      50             5            14
+```
+
+</details>
+
+Notice how few mice there are at each timepoint compared with the number of worms. **The number of mice, not the number of worms, is what limits how confidently you can compare timepoints.**
+
+Some worms have no host at all. Check which:
+
+```{r}
+worms |> filter(is.na(host_id)) |> count(dpi, lifestage)
+```
+
+These are the newly hatched larvae, which were hatched in vitro. They cannot be given a mouse random effect, and **mixed-effects models silently drop rows with a missing grouping variable**. In Section 13 we therefore filter them out explicitly, so you can see which worms each model uses. (If they share a hatching batch, a `batch` column could serve as their grouping variable instead.)
+
+### 12.2 Is each mouse sampled at only one timepoint?
+
+The models in Section 13 assume mice are *nested* within timepoints (each mouse contributes to a single dpi). Check that this holds:
+
+```{r host-nesting}
+worms |>
+  filter(!is.na(host_id)) |>
+  group_by(host_id) |>
+  summarise(n_dpi = n_distinct(dpi)) |>
+  filter(n_dpi > 1)             # should return zero rows
+```
+
+Zero rows means the nesting is clean. If your real design has mice contributing at several timepoints, the model structure changes (see Section 16).
+
+### 12.3 Do mice differ from each other?
+
+To see mouse-to-mouse variation across all stages on one axis, express each worm's length **relative to the average for its lifestage and timepoint** (1 = typical). If worms were independent, each mouse's worms would scatter evenly around 1.
+
+```{r fig-mouse-clustering, fig.width=10}
+worms <- worms |>
+  group_by(dpi, lifestage) |>
+  mutate(rel_length = wb_length / mean(wb_length)) |>
+  ungroup()
+
+worms |>
+  filter(!is.na(host_id)) |>
+  ggplot(aes(x = host_id, y = rel_length)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_point(aes(colour = lifestage), alpha = 0.7,
+             position = position_jitter(width = 0.15, height = 0, seed = 1)) +
+  stat_summary(fun = mean, fun.min = mean, fun.max = mean,
+               geom = "crossbar", width = 0.6, linewidth = 0.3) +   # mean per mouse
+  scale_colour_brewer(palette = "Dark2", drop = FALSE) +
+  facet_grid(. ~ dpi, scales = "free_x", space = "free_x", labeller = label_both) +
+  labs(x = "Mouse", y = "Body length relative to lifestage average", colour = "Lifestage") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+<details class="expected-figure">
+<summary>Check your figure: click to see what it should look like</summary>
+
+![Expected result. The same image is in the project folder as `expected_figures/fig-mouse-clustering.png`.](expected_figures/fig-mouse-clustering.png)
+
+</details>
+
+::: {.callout .callout-read}
+::: {.callout-title}
+How to read this
+:::
+
+- Each column is one mouse, and each dot is one of its worms. Panels are timepoints (dpi).
+- The y-axis is each worm's length divided by the average for its lifestage and timepoint: **1** (dashed line) is average, **1.2** means 20% longer than average, and **0.8** means 20% shorter.
+- The short horizontal bar is the **mean for that mouse**. If mice didn't matter, every bar would sit close to 1.
+:::
+
+Some mice have all their worms above 1 and others below. This is **clustering**: knowing which mouse a worm came from tells you something about its size. Ignoring that treats, say, 25 worms from 5 mice as if they were 25 independent pieces of evidence. This error is called **pseudoreplication**, and it makes confidence intervals too narrow and p-values too small.
+
+## 13. Mixed-effects models: accounting for host
+
+### 13.1 The idea
 
 An ordinary linear model (`lm`) assumes every observation is independent. A **mixed-effects model** adds a **random effect** that says "observations from the same mouse share a mouse-specific shift":
 
@@ -1055,7 +1322,7 @@ An ordinary linear model (`lm`) assumes every observation is independent. A **mi
 
 In R's `lme4` syntax, `(1 | host_id)` means "a separate baseline (intercept) for each mouse, drawn from a common distribution". The model then splits variation into **between-mouse** and **within-mouse** components.
 
-### 11.2 Fit the models
+### 13.2 Fit the models
 
 We model the **log** of length, so effects are ratios ("females are 25% longer"). We fit the ordinary model and the mixed model side by side.
 
@@ -1130,7 +1397,7 @@ How to read this
 
 This is the most information-dense output in the tutorial. Take it one block at a time.
 
-**Random effects.** The variance between mice is 0.0046 and the residual (within-mouse) variance is 0.0061. Section 11.4 turns these into one number, the ICC.
+**Random effects.** The variance between mice is 0.0046 and the residual (within-mouse) variance is 0.0061. Section 13.4 turns these into one number, the ICC.
 
 **Fixed effects.** There is one row per term. Because we modelled **log(length)**, each estimate is a difference on the log scale. Applying `exp()` turns it into a **ratio**, which is easier to talk about.
 
@@ -1148,7 +1415,7 @@ The "Correlation of Fixed Effects" block at the bottom can be ignored for now.
 To see every fixed effect as a ratio at once, run `exp(fixef(fit_lmm))`.
 :::
 
-### 11.3 How does accounting for mouse change the answers?
+### 13.3 How does accounting for mouse change the answers?
 
 ```{r lmm-se}
 # coef(summary(...)) is the model's coefficient table; as_tibble() makes it a tibble
@@ -1232,11 +1499,11 @@ How to read this
 :::
 
 - Both models give almost the same ratio: about **1.27**, so females are roughly 27% longer than males at both timepoints.
-- The mixed model's intervals are slightly **narrower** (for example 1.23 to 1.34 against 1.21 to 1.34 at 35 dpi). That is what Section 11.3 predicted: sex is compared *within* mice, so removing the mouse-to-mouse variation sharpens the comparison.
+- The mixed model's intervals are slightly **narrower** (for example 1.23 to 1.34 against 1.21 to 1.34 at 35 dpi). That is what Section 13.3 predicted: sex is compared *within* mice, so removing the mouse-to-mouse variation sharpens the comparison.
 - Both intervals are far from 1 (no difference), so the sex difference is clear whichever model you use.
 :::
 
-### 11.4 How much variation is between mice? (ICC)
+### 13.4 How much variation is between mice? (ICC)
 
 The **intraclass correlation coefficient (ICC)** is the proportion of total variation that is between mice. An ICC near 0 means worms from the same mouse are no more alike than worms from different mice. A high ICC means mouse matters a lot.
 
@@ -1270,7 +1537,7 @@ VarCorr(fit_lmm) |>
 
 In the simulation, mouse and individual variation were set to similar sizes, so the ICC should be moderate. Here it is **0.43**: after allowing for sex and timepoint, 43% of the variation in adult length is between mice, and 57% is between worms from the same mouse. With real data, a high ICC means pseudoreplication would have been a serious problem.
 
-### 11.5 Check the model
+### 13.5 Check the model
 
 Two quick checks: the residuals should form an even cloud, and the mouse effects should be roughly normally distributed.
 
@@ -1320,7 +1587,7 @@ How to read this
 - **Right (Q-Q plot of mouse effects).** Each dot is one mouse (10 here). If the mouse effects are roughly normally distributed, the dots lie near the line. Here they do. With 10 points, small wiggles mean nothing: look for one mouse far off the line.
 :::
 
-### 11.6 More worms per mouse is not more mice
+### 13.6 More worms per mouse is not more mice
 
 Back to growth. We compare estimated mean length for each lifestage-and-timepoint group with and without the mouse random effect. **First remove worms with no host** (the newly hatched larvae), so that both models use exactly the same rows. Otherwise `lmer` would drop them silently and the two models would not be comparable.
 
@@ -1365,9 +1632,9 @@ ggplot(est, aes(x = model, y = response / 1000,
 
 In every panel the mixed-model interval (red) is wider. With only 4 to 5 mice per timepoint, a mean based on 20 to 30 worms is really supported by 4 to 5 independent mice, and the wider interval reflects that. **To narrow it, you need more mice, not more worms per mouse.**
 
-### 11.7 A scaling slope with a mouse random effect
+### 13.7 A scaling slope with a mouse random effect
 
-Back to allometry (Section 9). Here is the stichosome slope fitted with and without a mouse random effect, again using the same rows (worms with a host) for both:
+Back to allometry (Section 8). Here is the stichosome slope fitted with and without a mouse random effect, again using the same rows (worms with a host) for both:
 
 ```{r lmm-slope}
 st_only <- seg_long |>
@@ -1404,7 +1671,7 @@ bind_rows(slope_row(fit_st_lm,  "lm (ignores mouse)"),
 
 In the simulation, mice differ in their relative stichosome length, so worms from the same mouse share a stichosome offset that body length doesn't explain. Even so, the two slopes here are almost identical (about 1.08), and the mixed-model interval is only slightly wider. That is because body length spans about three orders of magnitude, from L1 to adult, so the slope is pinned down by the huge size range and a small mouse offset barely moves it. The mouse effect matters much more when the size range is narrow, for example within one stage (try Exercise 5).
 
-### 11.8 Practical notes
+### 13.8 Practical notes
 
 - **Report both counts.** State the number of worms *and* the number of mice per group (for example "n = 25 worms from 5 mice").
 - **Missing grouping values.** `lmer` silently drops rows where the grouping variable is `NA`. Filter them out yourself, as above, and say how many worms were excluded.
@@ -1412,263 +1679,6 @@ In the simulation, mice differ in their relative stichosome length, so worms fro
 - **Few mice.** Random-effect variances are poorly estimated with fewer than about five mice per group. Interpret them cautiously.
 - **Degrees of freedom.** `lmerTest` and `emmeans` use approximations (Satterthwaite or Kenward-Roger) that reflect the number of mice. Report which was used. This tutorial sets `lmer.df = "satterthwaite"` in `emmeans()` so that everyone gets the same numbers: otherwise `emmeans` picks Kenward-Roger when the `pbkrtest` package happens to be installed, and Satterthwaite (with a message) when it isn't.
 - **Write the model down.** For example: "log body length ~ sex × timepoint + (1 | mouse), fitted with lme4 and lmerTest in R".
-
-## 12. Multivariate analysis: PCA across lifestages
-
-PCA summarises several region lengths at once, so we can see overall development and which regions drive it. **PCA needs complete rows**, so choose your variables with the missingness map in mind.
-
-::: {.callout .callout-why}
-::: {.callout-title}
-What this analysis does, and why it matters
-:::
-
-**What it does.** Each worm has six region lengths, so it is a point in a six-dimensional space, which you can't draw. **Principal component analysis (PCA)** finds new axes through that cloud of points. The first, **PC1**, points in the direction along which the worms differ most. **PC2** is the direction of the next-largest difference, at right angles to PC1, and so on. Each PC is a weighted combination of the original measurements; the weights are called **loadings**. Plotting PC1 against PC2 is like turning the cloud until you find the most informative view of it.
-
-**Why log and scale the data?** Logs make PCA about **proportional** differences, as in Section 9. **Scaling** (`scale. = TRUE`) gives every region the same weight. Without it, long regions such as the stichosome would dominate simply because their numbers are bigger.
-
-**Why it matters.** Six measurements that are all strongly related carry much less than six separate pieces of information. PCA shows how many independent patterns there really are, which groups separate, and which measurements drive the separation, without running a separate test for every measurement. It is **descriptive**: it shows patterns but does not test them. To test whether groups differ on a PC, use the scores in a model (Exercise 4).
-:::
-
-Choices made here:
-
-- Use the **region lengths** (not the `*_pct` columns, which carry the same information as the lengths, and not `wb_length` or `ant_st`, which are sums of the others).
-- **Leave out `ov_ts`**, because it is structurally missing in L1 and L2. Including it would remove whole lifestages from the analysis.
-- Use **log-transformed** lengths and scale them.
-
-```{r pca}
-pca_vars <- c("ant_nr", "nr_st", "st", "intestine", "rt_cl", "rest")
-
-pca_data <- worms |>
-  select(sample, any_of("host_id"), dpi, lifestage, stage, all_of(pca_vars)) |>
-  drop_na(all_of(pca_vars))      # only the variables in the PCA: host_id may legitimately be NA
-
-nrow(pca_data)                 # how many worms contribute?
-count(pca_data, lifestage)     # ... and from which stages?
-```
-
-<details class="expected-figure">
-<summary>Check your output: click to see what it should look like</summary>
-
-```
-[1] 95
-# A tibble: 7 × 2
-  lifestage              n
-  <fct>              <int>
-1 L1 (newly hatched)    13
-2 L1                     9
-3 L2                     7
-4 L3                    13
-5 L4                    12
-6 Adult female          21
-7 Adult male            20
-```
-
-</details>
-
-::: {.callout .callout-warning}
-The PCA uses only the **fully measured subset**. Check that every lifestage is still represented in reasonable numbers, as above. If one stage vanished, conclusions about it would be impossible. Also avoid filling gaps with the mean: that shrinks variation and distorts the axes.
-
-Note that `drop_na()` is restricted to the PCA variables. A bare `drop_na()` would also remove worms whose `host_id` is missing (the newly hatched larvae), which is not what we want here.
-:::
-
-```{r}
-pca <- pca_data |>
-  select(all_of(pca_vars)) |>
-  mutate(across(everything(), log10)) |>
-  prcomp(scale. = TRUE)
-
-summary(pca)
-```
-
-::: {.callout .callout-read}
-::: {.callout-title}
-How to read this
-:::
-
-- **Standard deviation** is how spread out the worms are along each principal component (PC). **Proportion of Variance** is the share of all the variation that PC captures, and **Cumulative Proportion** is the running total.
-- **PC1 captures 99.6%**. Almost all the variation among these worms is **size**: a big worm has big everything. That is expected when lengths span a 100-fold range.
-- PC2 captures only 0.17%. It describes small differences in proportions, which is the shape. Section 12.1 removes size to look at shape directly.
-:::
-
-```{r fig-pca}
-# share of the variation captured by each PC, as a tibble (columns PC, std.dev, percent, cumulative)
-var_explained <- broom::tidy(pca, matrix = "eigenvalues")
-
-pc_lab <- function(i) {
-  share <- var_explained |> filter(PC == i) |> pull(percent)
-  str_glue("PC{i} ({round(100 * share, 1)}%)")
-}
-
-scores <- bind_cols(pca_data |> select(sample, any_of("host_id"), dpi, lifestage),
-                    as_tibble(pca$x))
-
-p_pca <- ggplot(scores, aes(x = PC1, y = PC2, colour = lifestage)) +
-  geom_point(size = 2, alpha = 0.8) +
-  stat_ellipse(level = 0.9) +
-  scale_colour_brewer(palette = "Dark2") +
-  labs(x = pc_lab(1), y = pc_lab(2), colour = "Lifestage")
-
-p_pca
-```
-
-<details class="expected-figure">
-<summary>Check your figure: click to see what it should look like</summary>
-
-![Expected result. The same image is in the project folder as `expected_figures/fig-pca.png`.](expected_figures/fig-pca.png)
-
-</details>
-
-Expect PC1 to be mostly **overall size**, ordering worms from L1 through adults, because all regions grow together. PC2 and later axes describe how the proportions differ.
-
-::: {.callout .callout-read}
-::: {.callout-title}
-How to read this
-:::
-
-- Each dot is one worm. Each ellipse encloses roughly 90% of a group, to show where most of its worms lie.
-- **PC1** orders the worms by lifestage, from L1 (left) to adults (right): it is size. Newly hatched and 3 dpi L1 larvae overlap, because they are almost the same size.
-- **PC2** separates adult males (above 0) from adult females (below). The loadings plot below shows why.
-- The two axes are on very different scales: PC2 spans about 0.4 units and PC1 about 7. The plot stretches PC2 so you can see it.
-- The direction of a PC is arbitrary: flipping its sign gives exactly the same analysis. If your plot is a **mirror image** of the expected one, that is fine.
-:::
-
-```{r fig-loadings, fig.height=4}
-loadings <- as_tibble(pca$rotation, rownames = "region")
-loadings
-
-ggplot(loadings, aes(x = PC1, y = PC2)) +
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  geom_vline(xintercept = 0, linetype = "dotted") +
-  geom_segment(aes(x = 0, y = 0, xend = PC1, yend = PC2),
-               arrow = arrow(length = unit(0.2, "cm"))) +
-  # labels stacked to the right of the arrow tips, joined to them by thin lines
-  ggrepel::geom_text_repel(aes(x = PC1, y = PC2, label = region),
-                           nudge_x = 0.2, direction = "y", hjust = 0,
-                           min.segment.length = 0, segment.colour = "grey60", seed = 1) +
-  coord_cartesian(xlim = c(-0.8, 0.9)) +
-  labs(x = pc_lab(1), y = pc_lab(2))
-```
-
-<details class="expected-figure">
-<summary>Check your figure: click to see what it should look like</summary>
-
-![Expected result. The same image is in the project folder as `expected_figures/fig-loadings.png`.](expected_figures/fig-loadings.png)
-
-</details>
-
-::: {.callout .callout-read}
-::: {.callout-title}
-How to read this
-:::
-
-- Each arrow is one region. Its **loadings** (where the arrow points) say how much that region contributes to PC1 and PC2.
-- All the arrows reach the same distance to the right: every region has a PC1 loading of about **0.41**. PC1 is all regions together, **overall size**.
-- PC2 is dominated by **rest of body** (pointing up, 0.88), against the rectum/cloaca and the head regions (pointing down). A worm high on PC2 has a relatively long rest of body.
-- Adult males have a longer rest of body than females (about 12% against 8%, Section 8), so males sit higher on PC2 in the score plot.
-:::
-
-### 12.1 Removing size to see shape only
-
-Because size dominates PC1, shape differences are hidden in later axes. A simple way to focus on shape is to divide out size: subtract each worm's **mean log length** from every one of its log region lengths. What remains is the worm's relative proportions.
-
-::: {.callout .callout-why}
-::: {.callout-title}
-What this analysis does, and why it matters
-:::
-
-**What it does.** For each worm, it calculates one size number (the mean of its log region lengths) and subtracts it from every log length. Subtracting on the log scale is the same as dividing on the original scale, so what remains is each region **relative to the worm's overall size**. A PCA of these values describes shape only.
-
-**Why it matters.** Separating **size** from **shape** is the central problem of morphometrics. Two worms can differ simply because one is bigger, or because their body plans really differ. Ordinary PCA mixes the two, and size usually swamps everything else, as PC1's 99.6% showed. Removing size first reveals the body-plan differences, such as stage and sex differences in proportions. Plotting shape against size then asks directly whether shape changes as worms grow.
-:::
-
-```{r fig-shape-pca, fig.width=9}
-shape_data <- pca_data |>
-  mutate(across(all_of(pca_vars), log),                      # log every region length
-         log_size = rowMeans(pick(all_of(pca_vars))),         # one size number per worm
-         across(all_of(pca_vars), \(x) x - log_size))         # subtract it: what's left is shape
-
-shape_pca <- shape_data |>
-  select(all_of(pca_vars)) |>
-  prcomp()                            # the last PC will have ~zero variance: ignore it
-
-shape_scores <- bind_cols(shape_data |> select(sample, any_of("host_id"), lifestage, log_size),
-                          as_tibble(shape_pca$x))
-
-p_shape1 <- ggplot(shape_scores, aes(x = PC1, y = PC2, colour = lifestage)) +
-  geom_point(size = 2, alpha = 0.8) +
-  scale_colour_brewer(palette = "Dark2") +
-  labs(x = "Shape PC1", y = "Shape PC2", colour = "Lifestage")
-
-p_shape2 <- ggplot(shape_scores, aes(x = log_size, y = PC1, colour = lifestage)) +
-  geom_point(size = 2, alpha = 0.8) +
-  scale_colour_brewer(palette = "Dark2") +
-  labs(x = "Size (mean log length)", y = "Shape PC1", colour = "Lifestage")
-
-p_shape1 + p_shape2 + plot_layout(guides = "collect")
-```
-
-<details class="expected-figure">
-<summary>Check your figure: click to see what it should look like</summary>
-
-![Expected result. The same image is in the project folder as `expected_figures/fig-shape-pca.png`.](expected_figures/fig-shape-pca.png)
-
-</details>
-
-The right-hand panel asks: **does shape change with size?** A clear trend means development changes body proportions (allometry), not just size.
-
-::: {.callout .callout-read}
-::: {.callout-title}
-How to read this
-:::
-
-- With size removed, shape PC1 captures about **83%** of the remaining variation and shape PC2 about **10%**. Run `summary(shape_pca)` to see this.
-- **Left panel.** Shape PC1 still runs from larvae (left) to adults (right): body proportions change step by step through development. Shape PC2 separates adult females (above) from males (below).
-- **Right panel.** Shape PC1 rises steadily with size (correlation about 0.96): bigger worms have a different shape. This is the allometry from Section 9 seen again. Run `shape_pca$rotation` to see that shape PC1 is mainly the stichosome (+0.71) and rest of body (+0.37) against the anterior end to NR (−0.48).
-- Within the adults (top right), shape differs mainly by **sex**, not by size: most of the size-related change in shape happens between stages.
-- As with any PCA, an axis may come out mirror-imaged on another computer. That doesn't change the interpretation.
-:::
-
-::: {.callout .callout-note}
-PCA itself ignores mouse. To test group differences in PC scores while accounting for host, treat a PC score as the response in a mixed model, for example `lmer(PC1 ~ lifestage + (1 | host_id), data = filter(shape_scores, !is.na(host_id)))` (Exercise 4).
-:::
-
-## 13. Stichosome number
-
-`st_number` is an approximate count, measured in only a subset of worms. We treat it descriptively: plot it against body length and show who contributed.
-
-```{r fig-stnumber}
-st_data <- worms |> drop_na(st_number)
-
-count(st_data, lifestage)
-
-ggplot(st_data, aes(x = wb_length / 1000, y = st_number)) +
-  geom_point(aes(colour = lifestage), alpha = 0.7) +
-  geom_smooth(method = "loess", se = FALSE, colour = "black") +
-  scale_x_log10() +
-  scale_colour_brewer(palette = "Dark2", drop = FALSE) +   # keep the same colours as the other figures
-  labs(x = "Whole-body length (mm, log scale)",
-       y = "Approximate stichosome number", colour = "Lifestage")
-```
-
-<details class="expected-figure">
-<summary>Check your figure: click to see what it should look like</summary>
-
-![Expected result. The same image is in the project folder as `expected_figures/fig-stnumber.png`.](expected_figures/fig-stnumber.png)
-
-</details>
-
-Because the counts are approximate, a smooth curve and a clear statement of n are more honest than a precise statistical test.
-
-::: {.callout .callout-read}
-::: {.callout-title}
-How to read this
-:::
-
-- Each dot is one worm. The black line is a **loess smoother**: a flexible curve that follows the local average without assuming any shape in advance.
-- The count rises quickly with size, from a median of about **16 in L2** to about **36 in L4**, then **levels off at about 45 in adults**. In this simulation, most stichocytes are added before adulthood.
-- The small dip at the far right is an **edge effect** of the smoother, where there are few points. Don't read it as a real decline.
-- There are no L1 worms because stichosome number wasn't recorded for them. The L1 groups still appear in the legend so that the colours match the other figures.
-:::
 
 ## 14. A combined figure
 
@@ -1723,7 +1733,7 @@ In Excel: *File > Save As*, then choose **CSV UTF-8 (Comma delimited)**. Save th
 <details class="hint">
 <summary>Hint</summary>
 
-Store the model, then reuse the ICC code from Section 11.4:
+Store the model, then reuse the ICC code from Section 13.4:
 
 ```r
 fit_st_pct <- lmer(st_pct ~ lifestage + (1 | host_id), data = filter(worms, !is.na(host_id)))
@@ -1732,11 +1742,11 @@ VarCorr(fit_st_pct) |>
   summarise(icc = round(vcov[grp == "host_id"] / sum(vcov), 2))
 ```
 
-You should get an ICC of about **0.47**, compared with **0.43** for adult length in Section 11.4. So the stichosome share is at least as strongly clustered by mouse as length is.
+You should get an ICC of about **0.47**, compared with **0.43** for adult length in Section 13.4. So the stichosome share is at least as strongly clustered by mouse as length is.
 
 </details>
 
-**4. PC scores.** Model shape PC1 (Section 12.1) against lifestage with a mouse random effect. Which stage differences remain clear once mouse is accounted for?
+**4. PC scores.** Model shape PC1 (Section 10.1) against lifestage with a mouse random effect. Which stage differences remain clear once mouse is accounted for?
 
 <details class="hint">
 <summary>Hint</summary>
@@ -1750,7 +1760,7 @@ The second half of the output (`$contrasts`) compares every pair of lifestages, 
 
 </details>
 
-**5. Within-stage allometry.** Repeat the stichosome scaling slope (Section 11.7) for adults only. Does it differ from the pooled slope?
+**5. Within-stage allometry.** Repeat the stichosome scaling slope (Section 13.7) for adults only. Does it differ from the pooled slope?
 
 <details class="hint">
 <summary>Hint</summary>
@@ -1767,12 +1777,12 @@ You should get a slope of about **0.98** (95% CI about 0.88 to 1.08), from 41 wo
 
 </details>
 
-**6. (Advanced, optional) Power and mice.** This one needs you to edit a long chunk of code. Edit the R simulation chunk in Appendix C (set `eval = TRUE` in the chunk header, or just run it with its ▶ button) to use 8 mice per timepoint instead of 4 or 5, with the same number of worms in total. The chunk writes your simulated worms twice: as a messy sheet and in the tidy layout. Point Section 3.4 at `data/my_simulation_tidy.csv` instead of the provided tidy file. Rerun Section 11.6: how do the mixed-model intervals change? Then try 3 mice with twice as many worms each. (Your numbers will differ from the provided files, because the random numbers differ.)
+**6. (Advanced, optional) Power and mice.** This one needs you to edit a long chunk of code. Edit the R simulation chunk in Appendix C (set `eval = TRUE` in the chunk header, or just run it with its ▶ button) to use 8 mice per timepoint instead of 4 or 5, with the same number of worms in total. The chunk writes your simulated worms twice: as a messy sheet and in the tidy layout. Point Section 3.4 at `data/my_simulation_tidy.csv` instead of the provided tidy file. Rerun Section 13.6: how do the mixed-model intervals change? Then try 3 mice with twice as many worms each. (Your numbers will differ from the provided files, because the random numbers differ.)
 
 <details class="hint">
 <summary>Hint</summary>
 
-The number of mice per timepoint is set in one line of the simulation chunk, the one starting `n_mice = c(4, 4,`. Change the six numbers to `8, 8, 8, 8, 8, 8`. In Section 3.4, change the file name to `data/my_simulation_tidy.csv`. Expect the red (mixed-model) intervals in Section 11.6 to get narrower with more mice, even though the number of worms is unchanged.
+The number of mice per timepoint is set in one line of the simulation chunk, the one starting `n_mice = c(4, 4,`. Change the six numbers to `8, 8, 8, 8, 8, 8`. In Section 3.4, change the file name to `data/my_simulation_tidy.csv`. Expect the red (mixed-model) intervals in Section 13.6 to get narrower with more mice, even though the number of worms is unchanged.
 
 </details>
 
@@ -1783,7 +1793,7 @@ The number of mice per timepoint is set in one line of the simulation chunk, the
 - **Random slopes.** If the effect of sex or timepoint differs between mice, use `(1 + sex | host_id)` (needs enough worms per mouse and enough mice).
 - **More levels of grouping.** If mice come from several experiments, cages or batches, nest the random effects: `(1 | experiment/host_id)`, or `(1 | experiment) + (1 | host_id)` if mice appear in only one experiment.
 - **Worms with no host.** For in vitro hatched larvae, a `batch` column (hatching date or egg batch) can play the role of `host_id`, so they can be included in the mixed models.
-- **Mice sampled repeatedly.** If a mouse contributes worms at more than one timepoint, the dpi comparison becomes within-mouse, which changes the model and the power. Check Section 6.2 on your real data.
+- **Mice sampled repeatedly.** If a mouse contributes worms at more than one timepoint, the dpi comparison becomes within-mouse, which changes the model and the power. Check Section 12.2 on your real data.
 - **Growth curves.** Fit a smooth growth model of length against dpi with a mouse random effect (`mgcv::gam` with `s(host_id, bs = "re")`, or a nonlinear mixed model).
 - **Very few mice.** Bayesian models (`brms`) handle small numbers of mice more transparently than classical mixed models.
 - **True geometric morphometrics.** If you digitise landmark coordinates from images, the `geomorph` package (Procrustes superimposition, then PCA on shape) is the standard route.
@@ -2016,7 +2026,7 @@ It should also say what a **blank** means. For example: "blank in `ov_ts_um` mea
 
 ## Appendix C: how the practice data were simulated
 
-The practice files were made by `tools/make_simulated_data.py`. The R chunk below is the **same design written in R**: how many worms per timepoint, their average size and body proportions, the mouse effects, and the deliberate untidiness (spreadsheet headers, stray spaces, transcription errors and empty rows). Reading it shows exactly what structure the analyses are meant to recover, for example that mice differ in worm size, which is why the mixed models in Section 11 are needed.
+The practice files were made by `tools/make_simulated_data.py`. The R chunk below is the **same design written in R**: how many worms per timepoint, their average size and body proportions, the mouse effects, and the deliberate untidiness (spreadsheet headers, stray spaces, transcription errors and empty rows). Reading it shows exactly what structure the analyses are meant to recover, for example that mice differ in worm size, which is why the mixed models in Section 13 are needed.
 
 It is **not run** when you knit (`eval = FALSE`), and you only need to run it for Exercise 6. If you do run it, it writes `data/my_simulation_messy.csv` and the same worms in the tidy layout, `data/my_simulation_tidy.csv`. Its random numbers differ from the provided files, so don't mix the two.
 

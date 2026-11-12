@@ -2,7 +2,7 @@
 
 A hands-on R tutorial for analysing body measurements taken between anatomical landmarks, using simulated data from the whipworm *Trichuris muris* across its lifecycle.
 
-It is written for **postgraduate students with little or no R experience**. You start with what R is, and finish fitting mixed-effects models and running a PCA. Every step has code to run, an explanation of what the analysis does and why, and a hidden "check your answer" box showing the result you should get.
+It is written for **postgraduate students with little or no R experience**. You start with what R is, analyse the worms, and finish by fitting mixed-effects models that account for the mouse each worm came from. Every step has code to run, an explanation of what the analysis does and why, and a hidden "check your answer" box showing the result you should get.
 
 **Read it online:** <https://stephenrdoyle.github.io/morphometrics_tutorial/>. This is the finished tutorial with every output and figure, so you can look through it before installing anything. To *do* the tutorial, download it and run the code yourself (below).
 
@@ -10,12 +10,12 @@ It is written for **postgraduate students with little or no R experience**. You 
 
 ## What you will learn
 
-- Reading a spreadsheet into R, and turning an untidy lab sheet into a tidy table
+- Reading a spreadsheet into R, and spotting the problems in an untidy lab sheet
 - Quality-control checks that catch typing errors before any analysis
 - Publication-quality figures with **ggplot2**
 - Growth, body proportions and allometry (how body regions scale with body size)
-- **Mixed-effects models** for worms nested within mice, and why ignoring the mouse gives misleading p-values
 - **Principal component analysis (PCA)**, including separating size from shape
+- **Mixed-effects models** for worms nested within mice, and how accounting for the mouse changes the conclusions
 
 It also covers how to lay out your own data so that analysis is easy (Appendix B). An Excel template is included.
 
