@@ -6,6 +6,7 @@
 
 # Knitted output and files the tutorial writes while running
 *.html
+!docs/index.html
 *_files/
 *_cache/
 data/my_*.csv

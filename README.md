@@ -4,6 +4,8 @@ A hands-on R tutorial for analysing body measurements taken between anatomical l
 
 It is written for **postgraduate students with little or no R experience**. You start with what R is, and finish fitting mixed-effects models and running a PCA. Every step has code to run, an explanation of what the analysis does and why, and a hidden "check your answer" box showing the result you should get.
 
+**Read it online:** <https://stephenrdoyle.github.io/morphometrics_tutorial/>. This is the finished tutorial with every output and figure, so you can look through it before installing anything. To *do* the tutorial, download it and run the code yourself (below).
+
 > **The practice data are simulated.** They were generated to look realistic for teaching and are **not real measurements**. Everyone uses the same files, so every student gets identical numbers and figures.
 
 ## What you will learn
@@ -78,6 +80,7 @@ The exercises at the end have hidden **Hint** boxes.
 | `expected_figures/` | What each figure should look like once you have run its code |
 | `template/` | An Excel template for entering your own measurements in the tidy layout, with drop-down lists, a data dictionary and an example sheet |
 | `tools/` | The Python script that generated the practice data (not needed for the tutorial) |
+| `docs/index.html` | The knitted tutorial, published as the web page linked above |
 
 ## Using your own data
 
@@ -92,6 +95,19 @@ If your data are already in a different spreadsheet layout, Section 3 shows how 
 The tutorial and expected outputs were generated with R 4.5.0 on macOS, with tidyverse 2.0.0, ggplot2 4.0.3, lme4 2.0-6, lmerTest 3.2-1, emmeans 2.0.4, patchwork 1.3.2 and ggrepel 0.9.8. Random elements (jittered points, label placement) use fixed seeds, so the figures should match exactly. A PCA axis may occasionally come out mirror-imaged on a different computer. That doesn't change the interpretation, and the tutorial says so where it matters.
 
 The practice data can be regenerated exactly with `python tools/make_simulated_data.py` (requires numpy and pandas; fixed seed 2026).
+
+**For maintainers:** after editing the tutorial, rebuild the web page from R, in the project folder:
+
+```r
+rmarkdown::render("trichuris_landmark_morphometrics_tutorial.Rmd", output_file = "docs/index.html")
+```
+
+If a figure changes on purpose, also update its PNG in `expected_figures/`.
+
+## Licence
+
+- **Code** (the R code in the tutorial and `tools/`): [MIT License](LICENSE).
+- **Tutorial text, figures, practice data and template:** [CC BY 4.0](LICENSE-CONTENT.md). You may reuse and adapt them for any purpose, with credit.
 
 ## Contact
 
