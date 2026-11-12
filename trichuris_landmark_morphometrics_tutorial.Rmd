@@ -11,8 +11,6 @@ output:
     highlight: tango
     code_folding: show
     df_print: paged
-params:
-  web_version: false
 ---
 
 ```{r knitr-options, include=FALSE}
@@ -22,7 +20,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, fig.width = 7, fig.heigh
 ```{r web-version, echo=FALSE, results="asis"}
 # The published web page already shows every figure and output, so the
 # "Check your ..." boxes would only repeat them there: hide them on that version.
-if (isTRUE(get0("params")$web_version)) {
+if (isTRUE(getOption("tutorial.web_version"))) {
   cat("<style>details.expected-figure { display: none; }</style>")
 }
 ```

@@ -99,11 +99,12 @@ The practice data can be regenerated exactly with `python tools/make_simulated_d
 **For maintainers:** after editing the tutorial, rebuild the web page from R, in the project folder:
 
 ```r
-rmarkdown::render("trichuris_landmark_morphometrics_tutorial.Rmd", output_file = "docs/index.html",
-                  params = list(web_version = TRUE))
+options(tutorial.web_version = TRUE)
+rmarkdown::render("trichuris_landmark_morphometrics_tutorial.Rmd", output_file = "docs/index.html")
+options(tutorial.web_version = NULL)
 ```
 
-`web_version = TRUE` hides the "Check your figure/output" boxes, which would only repeat what the web page already shows. Students knitting the tutorial themselves still get them.
+The `tutorial.web_version` option hides the "Check your figure/output" boxes, which would only repeat what the web page already shows. Students knitting the tutorial themselves still get them.
 
 If a figure changes on purpose, also update its PNG in `expected_figures/`.
 
