@@ -17,7 +17,7 @@ It is written for **postgraduate students with little or no R experience**. You 
 - **Mixed-effects models** for worms nested within mice, and why ignoring the mouse gives misleading p-values
 - **Principal component analysis (PCA)**, including separating size from shape
 
-It also covers how to lay out your own data so that analysis is easy. An Excel template is included.
+It also covers how to lay out your own data so that analysis is easy (Appendix B). An Excel template is included.
 
 **Time needed:** about 6 to 8 hours, best spread over three sessions.
 
@@ -84,9 +84,10 @@ The exercises at the end have hidden **Hint** boxes.
 
 ## Using your own data
 
-1. Enter your measurements in `template/trichuris_morphometrics_data_template.xlsx`, one row per worm.
-2. Save the `data` sheet as **CSV UTF-8**, in the `data/` folder.
-3. Point Section 3.4 of the tutorial at your file, and run the rest.
+1. Read Appendix B of the tutorial, "How to set out your own data table".
+2. Enter your measurements in `template/trichuris_morphometrics_data_template.xlsx`, one row per worm.
+3. Save the `data` sheet as **CSV UTF-8**, in the `data/` folder.
+4. Point Section 3.4 of the tutorial at your file, and run the rest.
 
 If your data are already in a different spreadsheet layout, Section 3 shows how to convert them.
 

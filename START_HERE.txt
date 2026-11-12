@@ -12,6 +12,7 @@ Trichuris muris landmark morphometrics tutorial (RStudio project)
 Folders
   data/       the two practice CSV files (simulated, not real measurements) and a README
   template/   an Excel template for entering your own worm measurements in the tidy layout
+              (Appendix B of the tutorial explains the layout)
   tools/      the Python script that generated the practice data (not needed to follow the tutorial)
   expected_figures/  what each figure should look like once you have run its chunk.
                      The knitted HTML shows the same images in collapsed "Check your figure" boxes.

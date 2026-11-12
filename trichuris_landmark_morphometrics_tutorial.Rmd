@@ -107,10 +107,11 @@ Under every figure, and under the most important tables, there is a collapsed bo
 If yours looks different, check that you ran the earlier chunks in order and didn't change the code.
 :::
 
-### New to R? Two appendices at the end
+### Appendices at the end
 
 - **[Appendix A: R in ten minutes](#appendix-a-r-in-ten-minutes).** If you have never used R, work through this first (about 20 minutes). It covers the handful of ideas the code relies on: storing values with `<-`, vectors, functions, missing values (`NA`), tables (tibbles), factors, the pipe `|>` and short functions such as `\(x) x / 1000`. Come back here when you've finished.
-- **[Appendix B: how the practice data were simulated](#appendix-b-how-the-practice-data-were-simulated).** The R code behind the practice data. You don't need it for the tutorial; it is there for reference and for Exercise 6.
+- **[Appendix B: how to set out your own data table](#appendix-b-how-to-set-out-your-own-data-table).** How to lay out a spreadsheet so the analysis is easy: the template workbook, recommended columns and tidy-data habits. Read it before you enter your own data.
+- **[Appendix C: how the practice data were simulated](#appendix-c-how-the-practice-data-were-simulated).** The R code behind the practice data. You don't need it for the tutorial; it is there for reference and for Exercise 6.
 
 ### When something goes wrong
 
@@ -130,7 +131,7 @@ Error messages in R look alarming but are usually one of a few things. Read the 
 
 If you are stuck, **Session > Restart R** and then **Run > Run All Chunks Above** fixes most problems caused by running things out of order.
 
-## 0. Introduction and data layout
+## 0. Introduction and the practice data
 
 In this tutorial you will analyse **body-axis measurements taken between anatomical landmarks** on whipworms (*Trichuris muris*) across the lifecycle. For each worm you may have measured whole-body length and the distances between structures such as the nerve ring and the entrance to the stichosome, and then asked:
 
@@ -143,161 +144,11 @@ In this tutorial you will analyse **body-axis measurements taken between anatomi
 
 All plots are made with **ggplot2**.
 
-### How to set out your data table
+### How the data should be laid out
 
-The most important step happens **before you open R**: how the spreadsheet is laid out. A well-laid-out table makes the analysis easy, and a badly laid-out one means hours of cleaning. The rule is **tidy data**:
+The analysis starts from a **tidy** table: **one row per worm, one column per variable, one value per cell**. Stage and sex go in separate columns, measurements are numbers in µm with the unit in the header, and a missing value is a blank cell (never 0, "-" or "n/a"). Section 3 converts the untidy practice file into this layout.
 
-> **One row per worm. One column per variable. One value per cell.**
-
-#### Two starting points
-
-1. **You are about to enter new data.** Use the template workbook that comes with this tutorial, `trichuris_morphometrics_data_template.xlsx`. It has a `data` sheet with the columns below, drop-down lists for `lifestage`, `sex` and `source`, number checks on the measurement columns, a `data_dictionary` sheet, an `example` sheet of six worms, and a `README` sheet. Export the `data` sheet as CSV (UTF-8) and go to Section 3.4.
-2. **You already have a spreadsheet.** Section 3 walks through converting a typical untidy sheet into this layout, step by step, with checks. You do it once per dataset.
-
-#### Recommended columns
-
-Dark-blue headers in the template are the core columns, and lighter ones are optional.
-
-| Column | What goes in it | Example |
-|---|---|---|
-| `sample` | Unique ID, one per worm | S001 |
-| `host_id` | The mouse the worm came from (blank if it did not come from a host) | M07 |
-| `batch` | Optional: experiment, infection cohort, hatching batch or cage | EXP2 |
-| `dpi` | Days post infection (a number only) | 21 |
-| `lifestage` | L1, L2, L3, L4 or Adult | Adult |
-| `sex` | Female, Male, or blank if not sexed | Female |
-| `source` | Where the worm came from: `host` or `hatched in vitro` | host |
-| `wb_length_um`, `ant_nr_um`, `nr_st_um`, `st_um`, ... | One column per raw measurement, in µm, **numbers only** | 24980 |
-| `st_number` | Approximate stichosome number | 41 |
-| `observer`, `measured_on` | Optional: who measured it and when (useful for checking measurement drift) | AB, 2026-03-14 |
-| `notes` | Free text for anything unusual | tail broken |
-
-Note that **stage and sex are separate columns**. Putting both in one cell (for example "Adult – Female") forces you to split them apart before every analysis, and it makes it impossible to ask a question such as "does sex matter across all adult timepoints?" without cleaning first.
-
-::: {.callout .callout-tip}
-The rest of this section is reference material for when you **prepare your own data**. On a first pass, read the summary above and the note about the practice file below, then move on to Section 1. Click the grey box to open the details.
-:::
-
-<details class="more-reading">
-<summary>More on tidy data: spotting problem columns, good habits, and fixing an existing sheet (click to open)</summary>
-
-#### How to spot a column that needs splitting
-
-Look for these signs in a column:
-
-- **A separator inside the values**: a dash, slash, semicolon, comma or brackets ("Adult – Female", "St (or end of Os)").
-- **A qualifier tacked on**: "L1 – newly hatched" adds a note about origin to a stage.
-- **A value plus a unit**: "250 µm" in a cell.
-- **A range or approximation**: "40–45" or "~40" in a count cell.
-- **A compound ID** that packs two things together, for example "M07-S12" for host and worm.
-- **A question you can't answer with a simple filter**: if "all adults, regardless of sex" needs text matching, the column holds two variables.
-
-**Split a column when each part is something you might filter, group or plot by on its own.** Don't split an ID such as "S001" that you would never analyse in pieces.
-
-Three questions to ask about every column:
-
-1. **Does it hold one variable only?** "Adult – Female" holds two (stage and sex). "L1 – newly hatched" holds two (stage and where the worm came from).
-2. **Is every value spelled the same way?** "L1", "l1", "L1 " (trailing space) and "Larva 1" are four different categories to R. Use drop-down lists.
-3. **Could it be calculated from other columns?** If so, don't type it. Percentages of total length can be computed in R from the lengths, so they never disagree with the lengths.
-
-#### Avoid and instead
-
-| Avoid | Instead |
-|---|---|
-| "Adult – Female" (stage and sex in one cell) | `lifestage` = "Adult", `sex` = "Female" |
-| "L1 – newly hatched" mixed in with "L1" in the same column | `lifestage` = "L1" for both, and record the difference in `source` (or with `dpi` = 0) |
-| Typing the same category differently ("L1", "l1", "L1 ", "Larva 1") | One spelling, always. Use a drop-down list in your spreadsheet to enforce it |
-| Long headers with spaces, line breaks and symbols ("% of Total – NR to Entrance of St (or end of Os)") | Short plain headers with units: `nr_st_um`. Put the full description in the data dictionary |
-| Units inside cells ("250 µm") | Units in the header only. A cell with "250 µm" is read as text, not a number |
-| Zero for "not measured", or "-", "n/a", "?" | Leave the cell blank. Use 0 only when the measurement really was zero |
-| Percent-of-total columns calculated in the spreadsheet | Record raw lengths only and let R calculate percentages. This avoids copy/paste and arithmetic errors |
-| Merged cells, blank rows, blank columns, totals or averages under the data | One header row, then data only, with no gaps |
-| Colours or bold text carrying information (for example red = damaged) | A real column such as `notes` or `damaged` (yes/no). Colours are lost when you export |
-| Dates as "3/4/26" (ambiguous) | ISO format: 2026-04-03 |
-| Recording a sum and all its parts without checking they agree | If you record `ant_nr_um`, `nr_st_um` **and** `ant_st_um`, check that the first two add up to the third (Section 5.2) |
-
-#### Suggested splits for a typical lab sheet (like the practice file)
-
-| Current column | Suggestion |
-|---|---|
-| `Lifestage` ("L1 – newly hatched", "Adult – Female") | Three columns: `lifestage` (L1 to L4, Adult), `sex` (Female, Male, blank if not sexed) and `source` (host, hatched in vitro) |
-| `Timepoint (dpi)` | Keep as a number. Use 0 for larvae hatched in vitro |
-| `Sample` | Keep as a unique worm ID. Add `host_id` for the mouse, and `batch` if worms came from different experiments or hatching batches |
-| `Anterior body end to Entrance of St (or end of Os)` | The "(or end of Os)" suggests two landmarks share one column. If the stichosome entrance and the end of the oesophagus are the same point in some stages but not others, record one landmark consistently, or add a column saying which one was measured |
-| `Ov/Ts` and `Rt/Cl` | Keep each as a single length column. `sex` already says whether it is ovary or testis, rectum or cloaca |
-| `Rest of body` | If you work it out by subtraction (whole body minus the other regions), you don't need to type it: it can be calculated. Keep the column only if you measured it directly |
-| `% of Total – ...` columns | Don't record these. R calculates them from the lengths |
-| `APPROX. St numbers` | If it contains ranges ("40–45") or symbols ("~40"), keep the column numeric: record one best estimate and put the uncertainty in `notes`, or use separate minimum and maximum columns |
-
-#### When to combine instead
-
-The opposite problem is **one variable spread across several columns**, for example separate "Female length" and "Male length" columns, or one column per timepoint. Those should be a single `length` column plus `sex` or `dpi`.
-
-The design used here (one row per worm, one column per landmark) is already the right shape. Move to **one row per measurement** only if the same worm is measured more than once, for example by several observers. In that case add `observer` and `replicate` columns.
-
-#### The data dictionary
-
-A data dictionary is a table that says what every column means. It is the most useful thing you can give a collaborator (or yourself in a year). The template contains a full one. Here is the shape of it:
-
-| column | meaning | type | unit | allowed values |
-|---|---|---|---|---|
-| `sample` | Unique ID for each worm | text | | never repeated |
-| `dpi` | Days post infection (0 = hatched in vitro) | whole number | days | 0 or more |
-| `lifestage` | Developmental stage | list | | L1, L2, L3, L4, Adult |
-| `sex` | Sex; blank if not sexed | list | | Female, Male |
-| `wb_length_um` | Whole-body length | number | µm | 0 or more |
-
-It should also say what a **blank** means. For example: "blank in `ov_ts_um` means the organ was not yet present (early larvae) or not measured. It does *not* mean zero."
-
-#### General habits for tidy data
-
-**Column names**
-
-- Short, lowercase, with underscores and no spaces or symbols.
-- Put the unit in the name (`wb_length_um`) and keep a consistent order (`ant_nr` before `nr_st`).
-- Never start a name with a digit.
-
-**Categories**
-
-- One fixed spelling for each category, enforced with a drop-down list.
-- Watch for trailing spaces, capitalisation differences and en dashes versus hyphens. Each creates a new group in R.
-- Put explanations in a `notes` column, never inside the category.
-
-**Missing values**
-
-- Leave cells blank. Don't use 0, "-", "n/a" or "?".
-- A blank can mean "not measured" or "not applicable" (an ovary in an early larva). Say what it means in the data dictionary. If R needs to tell the two apart, add a column that records it.
-
-**IDs and structure**
-
-- Keep IDs unique and spelled identically every time ("M07", never "M7").
-- Record every grouping factor that might make worms resemble each other: host, batch, observer, measurement date.
-
-**Sheet hygiene**
-
-- One table per sheet and one header row.
-- No merged cells, blank rows, subtotals, or colour used as data.
-- ISO dates (2026-04-03).
-
-**Raw versus calculated**
-
-- Record only what you measured. Percentages, totals and differences can be calculated.
-- If you do record a sum and all its parts, check they agree (Section 5.2).
-
-**Documentation and checks**
-
-- Write a data dictionary: meaning, unit, allowed values, and what a blank means.
-- Keep the raw file untouched.
-- Run the same checks every time you add data: unique IDs, plausible ranges, parts that add up, and a count of rows per group.
-
-#### Making the rebuild easier
-
-- Start from the template workbook so the headers, drop-downs and dictionary are already set up.
-- Paste measurement columns in as **values only**, so spreadsheet formatting doesn't come along.
-- Excel and Google Sheets can split "Adult – Female" with *Text to Columns*, using the delimiter " – " (a space, an en dash, a space). Then fill `source` with a filter.
-- Enter new data straight into the tidy layout, so you won't need to convert it again.
-
-</details>
+If you will be entering or preparing **your own data**, read [Appendix B: how to set out your own data table](#appendix-b-how-to-set-out-your-own-data-table). It covers the template workbook, the recommended columns, how to spot columns that need splitting, and good spreadsheet habits.
 
 ::: {.callout .callout-note}
 ::: {.callout-title}
@@ -463,13 +314,13 @@ The messy file contains the awkward features real data has:
 How the files were made
 :::
 
-Both files were generated by the script `tools/make_simulated_data.py` (fixed random seed 2026), so they can be regenerated exactly. The same design written in R is in [Appendix B](#appendix-b-how-the-practice-data-were-simulated) at the end, for reference and for Exercise 6. You don't need it for the tutorial.
+Both files were generated by the script `tools/make_simulated_data.py` (fixed random seed 2026), so they can be regenerated exactly. The same design written in R is in [Appendix C](#appendix-c-how-the-practice-data-were-simulated) at the end, for reference and for Exercise 6. You don't need it for the tutorial.
 :::
 
 
 ## 3. From spreadsheet to tidy data
 
-This section turns a spreadsheet into the tidy layout described in Section 0. There are two routes:
+This section turns a spreadsheet into the tidy layout described in Section 0 (in full in [Appendix B](#appendix-b-how-to-set-out-your-own-data-table)). There are two routes:
 
 - **Your data are already in the template layout** (you entered them with `trichuris_morphometrics_data_template.xlsx`). Skip to Section 3.4 and read your CSV.
 - **You have an existing, untidy spreadsheet** (like the simulated one). Work through 3.1 to 3.3, which convert it and save a tidy CSV. You do this once per dataset.
@@ -1981,7 +1832,7 @@ You should get a slope of about **0.98** (95% CI about 0.88 to 1.08), from 41 wo
 
 </details>
 
-**6. (Advanced, optional) Power and mice.** This one needs you to edit a long chunk of code. Edit the R simulation chunk in Appendix B (set `eval = TRUE` in the chunk header, or just run it with its ▶ button) to use 8 mice per timepoint instead of 4 or 5, with the same number of worms in total. Point Section 3.1 at `data/my_simulation_messy.csv`, and use your own converted tidy file in Section 3.4 instead of the provided one. Rerun Section 11.6: how do the mixed-model intervals change? Then try 3 mice with twice as many worms each. (Your numbers will differ from the provided files, because the random numbers differ.)
+**6. (Advanced, optional) Power and mice.** This one needs you to edit a long chunk of code. Edit the R simulation chunk in Appendix C (set `eval = TRUE` in the chunk header, or just run it with its ▶ button) to use 8 mice per timepoint instead of 4 or 5, with the same number of worms in total. Point Section 3.1 at `data/my_simulation_messy.csv`, and use your own converted tidy file in Section 3.4 instead of the provided one. Rerun Section 11.6: how do the mixed-model intervals change? Then try 3 mice with twice as many worms each. (Your numbers will differ from the provided files, because the random numbers differ.)
 
 <details class="hint">
 <summary>Hint</summary>
@@ -2080,7 +1931,155 @@ toy |> mutate(across(c(length), \(x) x / 1000))   # ...or used in place, unnamed
 
 **Packages.** Extra tools come in **packages**. `install.packages("name")` downloads one **once per computer**. `library(name)` switches it on **in every new session**.
 
-## Appendix B: how the practice data were simulated
+## Appendix B: how to set out your own data table
+
+Read this before you collect or enter your own measurements. The most important step happens **before you open R**: how the spreadsheet is laid out. A well-laid-out table makes the analysis easy, and a badly laid-out one means hours of cleaning. The rule is **tidy data**:
+
+> **One row per worm. One column per variable. One value per cell.**
+
+### Two starting points
+
+1. **You are about to enter new data.** Use the template workbook that comes with this tutorial, `trichuris_morphometrics_data_template.xlsx`. It has a `data` sheet with the columns below, drop-down lists for `lifestage`, `sex` and `source`, number checks on the measurement columns, a `data_dictionary` sheet, an `example` sheet of six worms, and a `README` sheet. Export the `data` sheet as CSV (UTF-8) and go to Section 3.4.
+2. **You already have a spreadsheet.** Section 3 walks through converting a typical untidy sheet into this layout, step by step, with checks. You do it once per dataset.
+
+### Recommended columns
+
+Dark-blue headers in the template are the core columns, and lighter ones are optional.
+
+| Column | What goes in it | Example |
+|---|---|---|
+| `sample` | Unique ID, one per worm | S001 |
+| `host_id` | The mouse the worm came from (blank if it did not come from a host) | M07 |
+| `batch` | Optional: experiment, infection cohort, hatching batch or cage | EXP2 |
+| `dpi` | Days post infection (a number only) | 21 |
+| `lifestage` | L1, L2, L3, L4 or Adult | Adult |
+| `sex` | Female, Male, or blank if not sexed | Female |
+| `source` | Where the worm came from: `host` or `hatched in vitro` | host |
+| `wb_length_um`, `ant_nr_um`, `nr_st_um`, `st_um`, ... | One column per raw measurement, in µm, **numbers only** | 24980 |
+| `st_number` | Approximate stichosome number | 41 |
+| `observer`, `measured_on` | Optional: who measured it and when (useful for checking measurement drift) | AB, 2026-03-14 |
+| `notes` | Free text for anything unusual | tail broken |
+
+Note that **stage and sex are separate columns**. Putting both in one cell (for example "Adult – Female") forces you to split them apart before every analysis, and it makes it impossible to ask a question such as "does sex matter across all adult timepoints?" without cleaning first.
+
+
+### How to spot a column that needs splitting
+
+Look for these signs in a column:
+
+- **A separator inside the values**: a dash, slash, semicolon, comma or brackets ("Adult – Female", "St (or end of Os)").
+- **A qualifier tacked on**: "L1 – newly hatched" adds a note about origin to a stage.
+- **A value plus a unit**: "250 µm" in a cell.
+- **A range or approximation**: "40–45" or "~40" in a count cell.
+- **A compound ID** that packs two things together, for example "M07-S12" for host and worm.
+- **A question you can't answer with a simple filter**: if "all adults, regardless of sex" needs text matching, the column holds two variables.
+
+**Split a column when each part is something you might filter, group or plot by on its own.** Don't split an ID such as "S001" that you would never analyse in pieces.
+
+Three questions to ask about every column:
+
+1. **Does it hold one variable only?** "Adult – Female" holds two (stage and sex). "L1 – newly hatched" holds two (stage and where the worm came from).
+2. **Is every value spelled the same way?** "L1", "l1", "L1 " (trailing space) and "Larva 1" are four different categories to R. Use drop-down lists.
+3. **Could it be calculated from other columns?** If so, don't type it. Percentages of total length can be computed in R from the lengths, so they never disagree with the lengths.
+
+### Avoid and instead
+
+| Avoid | Instead |
+|---|---|
+| "Adult – Female" (stage and sex in one cell) | `lifestage` = "Adult", `sex` = "Female" |
+| "L1 – newly hatched" mixed in with "L1" in the same column | `lifestage` = "L1" for both, and record the difference in `source` (or with `dpi` = 0) |
+| Typing the same category differently ("L1", "l1", "L1 ", "Larva 1") | One spelling, always. Use a drop-down list in your spreadsheet to enforce it |
+| Long headers with spaces, line breaks and symbols ("% of Total – NR to Entrance of St (or end of Os)") | Short plain headers with units: `nr_st_um`. Put the full description in the data dictionary |
+| Units inside cells ("250 µm") | Units in the header only. A cell with "250 µm" is read as text, not a number |
+| Zero for "not measured", or "-", "n/a", "?" | Leave the cell blank. Use 0 only when the measurement really was zero |
+| Percent-of-total columns calculated in the spreadsheet | Record raw lengths only and let R calculate percentages. This avoids copy/paste and arithmetic errors |
+| Merged cells, blank rows, blank columns, totals or averages under the data | One header row, then data only, with no gaps |
+| Colours or bold text carrying information (for example red = damaged) | A real column such as `notes` or `damaged` (yes/no). Colours are lost when you export |
+| Dates as "3/4/26" (ambiguous) | ISO format: 2026-04-03 |
+| Recording a sum and all its parts without checking they agree | If you record `ant_nr_um`, `nr_st_um` **and** `ant_st_um`, check that the first two add up to the third (Section 5.2) |
+
+### Suggested splits for a typical lab sheet (like the practice file)
+
+| Current column | Suggestion |
+|---|---|
+| `Lifestage` ("L1 – newly hatched", "Adult – Female") | Three columns: `lifestage` (L1 to L4, Adult), `sex` (Female, Male, blank if not sexed) and `source` (host, hatched in vitro) |
+| `Timepoint (dpi)` | Keep as a number. Use 0 for larvae hatched in vitro |
+| `Sample` | Keep as a unique worm ID. Add `host_id` for the mouse, and `batch` if worms came from different experiments or hatching batches |
+| `Anterior body end to Entrance of St (or end of Os)` | The "(or end of Os)" suggests two landmarks share one column. If the stichosome entrance and the end of the oesophagus are the same point in some stages but not others, record one landmark consistently, or add a column saying which one was measured |
+| `Ov/Ts` and `Rt/Cl` | Keep each as a single length column. `sex` already says whether it is ovary or testis, rectum or cloaca |
+| `Rest of body` | If you work it out by subtraction (whole body minus the other regions), you don't need to type it: it can be calculated. Keep the column only if you measured it directly |
+| `% of Total – ...` columns | Don't record these. R calculates them from the lengths |
+| `APPROX. St numbers` | If it contains ranges ("40–45") or symbols ("~40"), keep the column numeric: record one best estimate and put the uncertainty in `notes`, or use separate minimum and maximum columns |
+
+### When to combine instead
+
+The opposite problem is **one variable spread across several columns**, for example separate "Female length" and "Male length" columns, or one column per timepoint. Those should be a single `length` column plus `sex` or `dpi`.
+
+The design used here (one row per worm, one column per landmark) is already the right shape. Move to **one row per measurement** only if the same worm is measured more than once, for example by several observers. In that case add `observer` and `replicate` columns.
+
+### The data dictionary
+
+A data dictionary is a table that says what every column means. It is the most useful thing you can give a collaborator (or yourself in a year). The template contains a full one. Here is the shape of it:
+
+| column | meaning | type | unit | allowed values |
+|---|---|---|---|---|
+| `sample` | Unique ID for each worm | text | | never repeated |
+| `dpi` | Days post infection (0 = hatched in vitro) | whole number | days | 0 or more |
+| `lifestage` | Developmental stage | list | | L1, L2, L3, L4, Adult |
+| `sex` | Sex; blank if not sexed | list | | Female, Male |
+| `wb_length_um` | Whole-body length | number | µm | 0 or more |
+
+It should also say what a **blank** means. For example: "blank in `ov_ts_um` means the organ was not yet present (early larvae) or not measured. It does *not* mean zero."
+
+### General habits for tidy data
+
+**Column names**
+
+- Short, lowercase, with underscores and no spaces or symbols.
+- Put the unit in the name (`wb_length_um`) and keep a consistent order (`ant_nr` before `nr_st`).
+- Never start a name with a digit.
+
+**Categories**
+
+- One fixed spelling for each category, enforced with a drop-down list.
+- Watch for trailing spaces, capitalisation differences and en dashes versus hyphens. Each creates a new group in R.
+- Put explanations in a `notes` column, never inside the category.
+
+**Missing values**
+
+- Leave cells blank. Don't use 0, "-", "n/a" or "?".
+- A blank can mean "not measured" or "not applicable" (an ovary in an early larva). Say what it means in the data dictionary. If R needs to tell the two apart, add a column that records it.
+
+**IDs and structure**
+
+- Keep IDs unique and spelled identically every time ("M07", never "M7").
+- Record every grouping factor that might make worms resemble each other: host, batch, observer, measurement date.
+
+**Sheet hygiene**
+
+- One table per sheet and one header row.
+- No merged cells, blank rows, subtotals, or colour used as data.
+- ISO dates (2026-04-03).
+
+**Raw versus calculated**
+
+- Record only what you measured. Percentages, totals and differences can be calculated.
+- If you do record a sum and all its parts, check they agree (Section 5.2).
+
+**Documentation and checks**
+
+- Write a data dictionary: meaning, unit, allowed values, and what a blank means.
+- Keep the raw file untouched.
+- Run the same checks every time you add data: unique IDs, plausible ranges, parts that add up, and a count of rows per group.
+
+### Making the rebuild easier
+
+- Start from the template workbook so the headers, drop-downs and dictionary are already set up.
+- Paste measurement columns in as **values only**, so spreadsheet formatting doesn't come along.
+- Excel and Google Sheets can split "Adult – Female" with *Text to Columns*, using the delimiter " – " (a space, an en dash, a space). Then fill `source` with a filter.
+- Enter new data straight into the tidy layout, so you won't need to convert it again.
+
+## Appendix C: how the practice data were simulated
 
 The practice files were made by `tools/make_simulated_data.py`. The R chunk below is the **same design written in R**: how many worms per timepoint, their average size and body proportions, the mouse effects, and the deliberate untidiness (spreadsheet headers, stray spaces, transcription errors and empty rows). Reading it shows exactly what structure the analyses are meant to recover, for example that mice differ in worm size, which is why the mixed models in Section 11 are needed.
 
