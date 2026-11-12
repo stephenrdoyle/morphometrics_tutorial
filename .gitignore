@@ -1,0 +1,15 @@
+# RStudio
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# Knitted output and files the tutorial writes while running
+*.html
+*_files/
+*_cache/
+data/my_*.csv
+figures/
+
+# OS
+.DS_Store

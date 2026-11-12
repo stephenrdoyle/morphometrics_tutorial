@@ -1,0 +1,20 @@
+Trichuris muris landmark morphometrics tutorial (RStudio project)
+==================================================================
+
+0. New to R? Install R and RStudio first (instructions under "Getting started" at the top of the tutorial),
+   then read "R in ten minutes" before Section 0. Allow about 6 to 8 hours over three sessions.
+1. Double-click  trichuris_morphometrics_tutorial.Rproj  to open the project in RStudio.
+2. Open  trichuris_landmark_morphometrics_tutorial.Rmd  and follow the tutorial.
+   - Run chunks one at a time (green play button, or Ctrl/Cmd + Shift + Enter), or
+   - click Knit to build the whole tutorial as an HTML page.
+3. The first time, install the packages listed in Section 1 of the tutorial.
+
+Folders
+  data/       the two practice CSV files (simulated, not real measurements) and a README
+  template/   an Excel template for entering your own worm measurements in the tidy layout
+  tools/      the Python script that generated the practice data (not needed to follow the tutorial)
+  expected_figures/  what each figure should look like once you have run its chunk.
+                     The knitted HTML shows the same images in collapsed "Check your figure" boxes.
+
+Everyone who uses these files gets identical numbers and figures.
+The practice data are simulated and illustrative: they are NOT real measurements.
